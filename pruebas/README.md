@@ -7,7 +7,9 @@ antes de integrar el sistema completo.
 
 1. **servo_test** - Solo necesita el ESP32 y el servo. Sin dependencias externas.
 2. **nfc_test** - Necesita el ESP32 y el RC522. Verifica la conexión SPI.
-3. **uart_test** - Necesita el ESP32 y la Raspberry Pi conectados. Verifica la comunicación serial.
+3. **ir_test** - Necesita el ESP32 y los dos sensores IR (GPIO34 y GPIO35). Mide el voltaje de cada salida y, con la prueba guiada (`g`), diagnostica alimentación, lógica invertida, oscilación y acoplamiento entre sensores.
+4. **uart_test** - Necesita el ESP32 y la Raspberry Pi conectados. Verifica la comunicación serial.
+5. **integracion_test** - RC522 + servo + UART funcionando juntos siguiendo el ciclo de clasificación del proyecto (sin IR ni motor; la etiqueta se acerca y se retira a mano). Requiere que las pruebas anteriores ya pasen. Ver [integracion_test/README.md](integracion_test/README.md).
 
 ## Requisitos comunes
 

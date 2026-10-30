@@ -5,7 +5,7 @@
 //   ESP32 GPIO18 (SCK)  ----> RC522 SCK
 //   ESP32 GPIO23 (MOSI) ----> RC522 MOSI
 //   ESP32 GPIO19 (MISO) ----> RC522 MISO
-//   ESP32 GPIO22         ----> RC522 RST
+//   ESP32 GPIO4          ----> RC522 RST  (GPIO22 queda para el SCL de la OLED)
 //   ESP32 3.3V          ----> RC522 3.3V  (NO usar 5V)
 //   ESP32 GND           ----> RC522 GND
 //
@@ -27,7 +27,7 @@
 #include <MFRC522.h>
 
 #define SS_PIN  5
-#define RST_PIN 22
+#define RST_PIN 4
 
 MFRC522 lector(SS_PIN, RST_PIN);
 

@@ -59,8 +59,14 @@ Posicion posiciones[] = {
   {"Categoria B (180°)",  DUTY_180, 180},
 };
 
+#include <esp_arduino_version.h>
+
 void moverServo(uint32_t duty) {
+#if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
+  ledcWrite(SERVO_PIN, duty);
+#else
   ledcWrite(PWM_CHANNEL, duty);
+#endif
 }
 
 void irAPosicion(int indice) {
@@ -76,8 +82,12 @@ void irAPosicion(int indice) {
 void setup() {
   Serial.begin(115200);
 
+#if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
+  ledcAttach(SERVO_PIN, PWM_FREQ, PWM_RESOL);
+#else
   ledcSetup(PWM_CHANNEL, PWM_FREQ, PWM_RESOL);
   ledcAttachPin(SERVO_PIN, PWM_CHANNEL);
+#endif
 
   Serial.println("=== Prueba Servo SG90 ===");
   Serial.println();

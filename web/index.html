@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Banda Clasificadora NFC</title>
+  <link rel="stylesheet" href="css/estilos.css">
+</head>
+<body>
+  <!-- ============ ENCABEZADO ============ -->
+  <header class="encabezado">
+    <div class="marca">
+      <span class="logo" aria-hidden="true">▤</span>
+      <div>
+        <h1>Banda Clasificadora NFC</h1>
+        <p class="sub">Panel de supervisión · Raspberry Pi</p>
+      </div>
+    </div>
+
+    <div class="chips-estado">
+      <span class="chip" id="chip-modo" title="Origen de los datos">
+        <span class="punto"></span><span id="txt-modo">Sin datos</span>
+      </span>
+      <span class="chip" id="chip-enlace" title="Latido UART entre ESP32 y Raspberry Pi">
+        <span class="punto"></span><span id="txt-enlace">Enlace: —</span>
+      </span>
+      <span class="chip" id="chip-maquina" title="Estado de la máquina de estados del ESP32">
+        <span class="punto"></span><span id="txt-maquina">ESP32: —</span>
+      </span>
+      <button class="btn-icono" id="btn-tema" title="Cambiar tema claro/oscuro" aria-label="Cambiar tema">◐</button>
+    </div>
+  </header>
+
+  <!-- ============ BARRA DE SIMULACIÓN ============ -->
+  <section class="barra-sim" aria-label="Controles de simulación">
+    <div class="grupo">
+      <button class="btn primario" id="btn-sim">▶ Iniciar simulación</button>
+      <button class="btn peligro" id="btn-emergencia" disabled>⏹ Paro de emergencia</button>
+      <button class="btn" id="btn-restablecer" disabled title="Equivale al botón físico de reinicio tras un error o paro">↺ Restablecer</button>
+    </div>
+    <div class="grupo">
+      <label for="sel-falla">Inyectar falla</label>
+      <select id="sel-falla">
+        <option value="SIN_ETIQUETA">Pieza sin etiqueta</option>
+        <option value="NO_REGISTRADA">Etiqueta no registrada</option>
+        <option value="ATASCO">Atasco en la banda</option>
+        <option value="ENLACE">Enlace UART caído (10 s)</option>
+        <option value="DUPLICADO">Mensaje UART duplicado</option>
+        <option value="HUECO">Mensaje UART perdido</option>
+        <option value="LLENO">Contenedor A lleno</option>
+        <option value="JUNTAS">Piezas muy juntas</option>
+      </select>
+      <button class="btn" id="btn-falla" disabled>Inyectar</button>
+    </div>
+    <div class="grupo">
+      <label for="rng-vel">Velocidad <output id="out-vel">1×</output></label>
+      <input type="range" id="rng-vel" min="0.5" max="4" step="0.5" value="1">
+      <button class="btn fantasma" id="btn-limpiar" title="Borra conteos, historial y alertas">Limpiar datos</button>
+    </div>
+  </section>
+
+  <!-- ============ PESTAÑAS ============ -->
+  <nav class="pestanas" role="tablist">
+    <button role="tab" class="pestana activa" data-vista="tiempo-real">Tiempo real</button>
+    <button role="tab" class="pestana" data-vista="inventario">Inventario</button>
+    <button role="tab" class="pestana" data-vista="etiquetas">Etiquetas <span class="insignia" id="ins-sync" hidden>!</span></button>
+    <button role="tab" class="pestana" data-vista="historial">Historial</button>
+    <button role="tab" class="pestana" data-vista="alertas">Alertas <span class="insignia" id="ins-alertas" hidden>0</span></button>
+  </nav>
+
+  <main>
+    <!-- ======================= TIEMPO REAL ======================= -->
+    <section class="vista activa" id="vista-tiempo-real">
+      <div class="kpis">
+        <article class="kpi">
+          <h3>Piezas procesadas</h3>
+          <p class="valor" id="kpi-total">0</p>
+          <p class="nota" id="kpi-ritmo">— piezas/min</p>
+        </article>
+        <article class="kpi">
+          <h3><span class="muestra cat-A"></span>Categoría A</h3>
+          <p class="valor" id="kpi-A">0</p>
+          <p class="nota" id="kpi-A-pct">0 %</p>
+        </article>
+        <article class="kpi">
+          <h3><span class="muestra cat-B"></span>Categoría B</h3>
+          <p class="valor" id="kpi-B">0</p>
+          <p class="nota" id="kpi-B-pct">0 %</p>
+        </article>
+        <article class="kpi">
+          <h3><span class="muestra cat-R"></span>Rechazo</h3>
+          <p class="valor" id="kpi-R">0</p>
+          <p class="nota" id="kpi-R-det">0 sin leer · 0 no registradas</p>
+        </article>
+        <article class="kpi">
+          <h3>Tiempo de ciclo</h3>
+          <p class="valor" id="kpi-ciclo">—</p>
+          <p class="nota">promedio por pieza</p>
+        </article>
+      </div>
+
+      <div class="rejilla-2">
+        <article class="tarjeta">
+          <header class="tarjeta-cab">
+            <h2>Vista de la banda</h2>
+            <span class="etq-estado" id="etq-estado">INACTIVO</span>
+          </header>
+
+          <div class="banda" id="banda">
+            <div class="banda-cinta"></div>
+            <div class="sensor" style="left:34%" id="sen-ir1"><span>IR inspección</span></div>
+            <div class="lector" style="left:34%" id="sen-nfc"><span>RC522</span></div>
+            <div class="compuerta" style="left:66%" id="compuerta"><span>Servo</span></div>
+            <div class="sensor" style="left:80%" id="sen-ir2"><span>IR salida</span></div>
+            <div class="contenedores">
+              <div class="cont cat-A"><b>A</b><span id="cont-A">0</span></div>
+              <div class="cont cat-R"><b>R</b><span id="cont-R">0</span></div>
+              <div class="cont cat-B"><b>B</b><span id="cont-B">0</span></div>
+            </div>
+            <div class="pieza" id="pieza" hidden></div>
+          </div>
+
+          <ol class="pipeline" id="pipeline">
+            <li data-estado="ESPERA">Espera</li>
+            <li data-estado="TRANSPORTE">Transporte</li>
+            <li data-estado="LECTURA_NFC">Lectura NFC</li>
+            <li data-estado="CLASIFICANDO">Compuerta</li>
+            <li data-estado="CONFIRMA_SALIDA">Confirma salida</li>
+          </ol>
+          <p class="lectura-actual" id="lectura-actual">Esperando pieza…</p>
+
+          <h3 class="sub-h">Distribución de piezas</h3>
+          <div class="barra-apilada" id="barra-dist" role="img" aria-label="Distribución por categoría"></div>
+          <ul class="leyenda">
+            <li><span class="muestra cat-A"></span>Categoría A</li>
+            <li><span class="muestra cat-B"></span>Categoría B</li>
+            <li><span class="muestra cat-R"></span>Rechazo</li>
+          </ul>
+        </article>
+
+        <article class="tarjeta">
+          <header class="tarjeta-cab">
+            <h2>Eventos en vivo</h2>
+            <span class="nota" id="nota-seq">seq —</span>
+          </header>
+          <ul class="feed" id="feed" aria-live="polite">
+            <li class="vacio">Aún no llegan eventos. Presiona <b>Iniciar simulación</b>.</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <!-- ======================= INVENTARIO ======================= -->
+    <section class="vista" id="vista-inventario">
+      <div class="contenedores-grid" id="inv-contenedores"></div>
+
+      <article class="tarjeta">
+        <header class="tarjeta-cab">
+          <h2>Inventario por etiqueta</h2>
+          <div class="filtros">
+            <select id="inv-filtro-cat" aria-label="Filtrar por categoría">
+              <option value="">Todas las categorías</option>
+              <option value="A">Categoría A</option>
+              <option value="B">Categoría B</option>
+              <option value="R">Rechazo</option>
+            </select>
+            <input type="search" id="inv-buscar" placeholder="Buscar UID o nombre…">
+          </div>
+        </header>
+        <div class="tabla-scroll">
+          <table>
+            <thead>
+              <tr><th>UID</th><th>Nombre</th><th>Categoría</th><th class="num">Cantidad</th><th>Última lectura</th></tr>
+            </thead>
+            <tbody id="inv-tabla"></tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+
+    <!-- ======================= ETIQUETAS ======================= -->
+    <section class="vista" id="vista-etiquetas">
+      <div class="rejilla-2">
+        <article class="tarjeta">
+          <header class="tarjeta-cab"><h2>Registrar etiqueta</h2></header>
+          <form id="form-etiqueta" class="formulario">
+            <label>UID (hex)
+              <input name="uid" required placeholder="04:A3:1F:B2:6C:80:00" pattern="^([0-9A-Fa-f]{2}:){3,9}[0-9A-Fa-f]{2}$">
+            </label>
+            <label>Nombre del objeto
+              <input name="nombre" required placeholder="Ej. Tornillo M3">
+            </label>
+            <label>Categoría
+              <select name="categoria">
+                <option value="A">A</option>
+                <option value="B">B</option>
+              </select>
+            </label>
+            <button class="btn primario" type="submit">Guardar en tabla maestra</button>
+          </form>
+
+          <div class="aviso" id="aviso-sync">
+            <p><b>Tabla del ESP32:</b> <span id="txt-sync">sincronizada</span></p>
+            <button class="btn" id="btn-sync">⇄ Sincronizar con ESP32</button>
+          </div>
+        </article>
+
+        <article class="tarjeta">
+          <header class="tarjeta-cab"><h2>UID detectados sin registrar</h2></header>
+          <p class="nota">Piezas que el ESP32 envió a rechazo porque su UID no estaba en la tabla. Regístralas con un clic.</p>
+          <ul class="lista-desconocidos" id="lista-desconocidos"><li class="vacio">Ninguno por ahora.</li></ul>
+        </article>
+      </div>
+
+      <article class="tarjeta">
+        <header class="tarjeta-cab"><h2>Tabla maestra de etiquetas</h2><span class="nota" id="nota-etiquetas"></span></header>
+        <div class="tabla-scroll">
+          <table>
+            <thead><tr><th>UID</th><th>Nombre</th><th>Categoría</th><th>Registrada</th><th></th></tr></thead>
+            <tbody id="tabla-etiquetas"></tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+
+    <!-- ======================= HISTORIAL ======================= -->
+    <section class="vista" id="vista-historial">
+      <article class="tarjeta">
+        <header class="tarjeta-cab">
+          <h2>Historial de piezas</h2>
+          <div class="filtros">
+            <select id="his-filtro-cat" aria-label="Filtrar por destino">
+              <option value="">Todos los destinos</option>
+              <option value="A">Categoría A</option>
+              <option value="B">Categoría B</option>
+              <option value="R">Rechazo</option>
+            </select>
+            <button class="btn" id="btn-csv">⭳ Exportar CSV</button>
+          </div>
+        </header>
+        <div class="tabla-scroll alta">
+          <table>
+            <thead>
+              <tr><th class="num">Seq</th><th>Hora</th><th>UID</th><th>Objeto</th><th>Destino</th><th>Motivo</th><th class="num">Ciclo</th><th>Llegada</th></tr>
+            </thead>
+            <tbody id="his-tabla"></tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+
+    <!-- ======================= ALERTAS ======================= -->
+    <section class="vista" id="vista-alertas">
+      <article class="tarjeta">
+        <header class="tarjeta-cab">
+          <h2>Alertas y diagnóstico</h2>
+          <button class="btn" id="btn-reconocer">Reconocer todas</button>
+        </header>
+        <ul class="lista-alertas" id="lista-alertas"><li class="vacio">Sin alertas.</li></ul>
+      </article>
+    </section>
+  </main>
+
+  <footer class="pie">
+    <span>Prototipo visual · los datos provienen del <b>simulador</b> hasta conectar el ESP32 por UART.</span>
+    <span>FI UNAM · Fundamentos de Sistemas Embebidos · Equipo 07</span>
+  </footer>
+
+  <div class="toast" id="toast" role="status" hidden></div>
+
+  <!-- Orden importa: estado -> ui -> simulador -> main -->
+  <script src="js/estado.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/simulador.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
