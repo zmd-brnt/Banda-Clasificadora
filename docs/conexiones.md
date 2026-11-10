@@ -331,13 +331,13 @@ Conecta y prueba **un módulo a la vez**. No pases al siguiente hasta que el ant
 | 1 | ESP32 solo | Cargar un *blink* | Carga sin errores; el LED de la placa parpadea | Ejemplo *Blink* del IDE |
 | 2 | Servo | `servo_test` | 3 posiciones repetibles; el ESP32 no se reinicia | `pruebas/servo_test` |
 | 3 | RC522 | `nfc_test` (**actualizado a RST = GPIO4**) | Firmware `0x91`/`0x92`; mismo UID en cada lectura; UID de 7 bytes con las NTAG213 | `pruebas/nfc_test` |
-| 4 | OLED | Escáner I2C, luego un texto | Aparece la dirección `0x3C`/`0x3D`; se ve el texto | **Falta** |
-| 5 | HC-SR04 × 2 | **Antes de conectar:** alimentar a 5 V y medir con multímetro el voltaje de `Echo` y de la salida del divisor. Luego leer la distancia por el Monitor Serial | `Echo` llega al ESP32 a ≤3.3 V; distancia con banda libre estable; cambia claramente al pasar la pieza real; un sensor no capta al otro; distancia mínima medida y compatible con la geometría | **Falta** (`ir_test` ya no aplica) |
-| 6 | Motor + TB6612 | PWM al 30, 60 y 100 % con AIN1/AIN2 fijos (solo avanza); confirmar el sentido | El motor gira **hacia adelante** y cambia de velocidad; si gira al revés, intercambiar AO1/AO2; el ESP32 no se reinicia | **Falta** |
-| 7 | Paro de emergencia | Con el motor girando, presionar el botón | El motor se detiene **aunque el programa no haga nada**; GPIO39 cambia a 0 | **Falta** |
-| 8 | LEDs, buzzer, Restablecer | Encender cada salida y leer el botón | Cada LED y el buzzer funcionan; GPIO36 cambia al presionar | **Falta** |
+| 4 | OLED | Escáner I2C, luego un texto | Aparece la dirección `0x3C`/`0x3D`; se ve el texto | `pruebas/oled_test` (sin probar en hardware) |
+| 5 | HC-SR04 × 2 | **Antes de conectar:** alimentar a 5 V y medir con multímetro el voltaje de `Echo` y de la salida del divisor. Luego leer la distancia por el Monitor Serial | `Echo` llega al ESP32 a ≤3.3 V; distancia con banda libre estable; cambia claramente al pasar la pieza real; un sensor no capta al otro; distancia mínima medida y compatible con la geometría | `pruebas/ultrasonico_test` (sin probar en hardware; el encabezado del .ino explica la medición del divisor) |
+| 6 | Motor + TB6612 | PWM al 30, 60 y 100 % con AIN1/AIN2 fijos (solo avanza); confirmar el sentido | El motor gira **hacia adelante** y cambia de velocidad; si gira al revés, intercambiar AO1/AO2; el ESP32 no se reinicia | `pruebas/motor_test` (sin probar en hardware) |
+| 7 | Paro de emergencia | Con el motor girando, presionar el botón | El motor se detiene **aunque el programa no haga nada**; GPIO39 cambia a 0 | `pruebas/paro_test`, modo `b`: congela el programa a propósito (sin probar en hardware) |
+| 8 | LEDs, buzzer, Restablecer | Encender cada salida y leer el botón | Cada LED y el buzzer funcionan; GPIO36 cambia al presionar | `pruebas/indicadores_test` (sin probar en hardware) |
 | 9 | UART con Raspberry Pi | `uart_test` en ambos lados | PING/PONG con la secuencia correcta durante 5 minutos sin errores | `pruebas/uart_test` |
-| 10 | Todo junto | Servo + motor moviéndose a la vez | El ESP32 **no se reinicia** y el RC522 sigue leyendo | — |
+| 10 | Todo junto | Servo + motor moviéndose a la vez | El ESP32 **no se reinicia** y el RC522 sigue leyendo | `firmware/banda_clasificadora` (comando `s` del Monitor Serial) |
 
 El paso 10 es el que valida el problema de caída de voltaje del avance. Si falla, medir el voltaje en `VIN` del ESP32 mientras arranca el motor.
 
@@ -350,8 +350,9 @@ El paso 10 es el que valida el problema de caída de voltaje del avance. Si fall
 | `pruebas/nfc_test/nfc_test.ino` | `RST_PIN` 22 → **4** | GPIO22 es el SCL por defecto del I2C, necesario para la OLED |
 | `servo_test`, `uart_test` | Sin cambios | — |
 | `pruebas/ir_test/ir_test.ino` | **Obsoleto** | Los IR se sustituyen por HC-SR04 |
-| Prueba nueva de HC-SR04 | **Pendiente de escribir** (p. ej. `pruebas/ultrasonico_test`) | Medir distancia, umbral, `Echo` a 3.3 V, interferencia entre sensores |
-| `esp32_integracion_test.ino` | Sin cambios por ahora | No usa sensores ni motor; los pines GPIO14/27 que libera esta decisión aún no se usan en ese código |
+| `pruebas/ultrasonico_test` | **Nueva** (escrita, compila, sin probar en hardware) | Medir distancia, calibrar umbral (modo `c`), interferencia entre sensores (modo `x`) |
+| `pruebas/oled_test`, `motor_test`, `paro_test`, `indicadores_test` | **Nuevas** (escritas, compilan, sin probar en hardware) | Pasos 4, 6, 7 y 8 de §7 |
+| `esp32_integracion_test.ino` | Sin cambios | No usa sensores ni motor. El sistema completo está en `firmware/banda_clasificadora` |
 
 ---
 

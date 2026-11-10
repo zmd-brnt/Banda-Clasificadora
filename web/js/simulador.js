@@ -16,14 +16,14 @@ const CANCELADO = Symbol("cancelado");
 
 /* Tiempos base (ms) de una pieza a velocidad 1×. Ajustar con mediciones reales. */
 const T = {
-  transporte: 1600,    // entrada -> IR de inspección
+  transporte: 1600,    // entrada -> sensor de inspección
   lecturaMin: 300,     // lectura NFC exitosa
   lecturaMax: 700,
   limiteNfc: 1500,     // documento: sin UID tras 1.5 s => rechazo
   servo: 400,          // movimiento de la compuerta
-  salida: 1200,        // IR inspección -> IR salida
+  salida: 1200,        // sensor de inspección -> sensor de salida
   aContenedor: 500,
-  atasco: 2500,        // "IR bloqueado más de N segundos"
+  atasco: 2500,        // "sensor bloqueado más de N segundos"
   separacionMin: 500,
   separacionMax: 1500,
   latido: 1000,
@@ -33,9 +33,9 @@ const T = {
 /* Etiquetas físicas que "existen" en el laboratorio simulado.
    Las 3 últimas NO están en la tabla maestra: sirven para probar el flujo de registro. */
 const ETIQUETAS_FISICAS = [
-  "04:A3:1F:B2:6C:80:00", "04:7B:22:C1:6C:80:00", "04:19:E0:5A:6C:80:00",
-  "04:C4:93:0D:6C:80:00", "04:5E:71:F8:6C:80:00", "04:88:0A:3E:6C:80:00",
-  "04:D2:6B:91:6C:80:00", "04:3F:A8:17:6C:80:00", "04:E6:52:C9:6C:80:00",
+  "04A31FB26C8000", "047B22C16C8000", "0419E05A6C8000",
+  "04C4930D6C8000", "045E71F86C8000", "04880A3E6C8000",
+  "04D26B916C8000", "043FA8176C8000", "04E652C96C8000",
 ];
 
 const Simulador = {
@@ -145,6 +145,9 @@ const Simulador = {
       case "VACIADO":
         this.contenido[cmd.categoria] = 0;
         break;
+      case "CAPACIDAD":
+        this.capacidad[cmd.categoria] = cmd.capacidad;
+        break;
     }
   },
 
@@ -225,7 +228,7 @@ const Simulador = {
     if (falla === "SIN_ETIQUETA") uid = null;
     else if (falla === "NO_REGISTRADA") {
       const fuera = ETIQUETAS_FISICAS.filter(u => !this.tablaLocal.has(u));
-      uid = fuera.length ? fuera[Math.floor(Math.random() * fuera.length)] : "04:FF:00:00:6C:80:00";
+      uid = fuera.length ? fuera[Math.floor(Math.random() * fuera.length)] : "04FF00006C8000";
     }
     else if (Math.random() < 0.07) uid = null;
     else uid = ETIQUETAS_FISICAS[Math.floor(Math.random() * ETIQUETAS_FISICAS.length)];
@@ -236,7 +239,7 @@ const Simulador = {
     const { uid, falla } = this._elegirPieza();
     let ciclo = 0;
 
-    // 1. Transporte hasta el IR de inspección
+    // 1. Transporte hasta el sensor de inspección
     this._estado("TRANSPORTE", "Banda en movimiento");
     UIBanda.nuevaPieza();
     UIBanda.motor(true);
@@ -244,14 +247,14 @@ const Simulador = {
     await this._espera(T.transporte, token);
     ciclo += T.transporte;
 
-    // 2. IR detecta -> se detiene la banda -> lectura NFC (máx. 1.5 s)
+    // 2. El sensor detecta -> se detiene la banda -> lectura NFC (máx. 1.5 s)
     UIBanda.motor(false);
     UIBanda.sensor("sen-ir1", true);
     UIBanda.sensor("sen-nfc", true);
     this._estado("LECTURA_NFC", "Leyendo etiqueta…");
     if (falla === "JUNTAS") {
       this._transmitir({ tipo: "ALERTA", ts: Date.now(), nivel: "advertencia", codigo: "PIEZAS_JUNTAS",
-        mensaje: "El IR de inspección se reactivó durante la clasificación: piezas muy juntas." });
+        mensaje: "El sensor de inspección se reactivó durante la clasificación: piezas muy juntas." });
     }
     const tLectura = uid ? T.lecturaMin + Math.random() * (T.lecturaMax - T.lecturaMin) : T.limiteNfc;
     await this._espera(tLectura, token);
@@ -280,8 +283,8 @@ const Simulador = {
     ciclo += T.servo;
     UIBanda.sensor("sen-ir1", false);
 
-    // 6. Reanuda y espera confirmación del IR de salida
-    this._estado("CONFIRMA_SALIDA", "Esperando IR de salida");
+    // 6. Reanuda y espera confirmación del sensor de salida
+    this._estado("CONFIRMA_SALIDA", "Esperando sensor de salida");
     UIBanda.motor(true);
     if (falla === "ATASCO") {
       UIBanda.moverPieza(52, "centro", (T.salida * 0.4) / this.velocidad);
@@ -289,9 +292,9 @@ const Simulador = {
       UIBanda.motor(false);
       UIBanda.sensor("sen-ir2", false);
       await this._espera(T.atasco, token);
-      this._detener("ERROR", "Atasco: el IR de salida no confirmó la pieza");
+      this._detener("ERROR", "Atasco: el sensor de salida no confirmó la pieza");
       this._transmitir({ tipo: "ALERTA", ts: Date.now(), nivel: "critico", codigo: "ATASCO",
-        mensaje: "La pieza no llegó al IR de salida. Motor detenido, buzzer y LED rojo. Retira la pieza y presiona Restablecer." });
+        mensaje: "La pieza no llegó al sensor de salida. Motor detenido, buzzer y LED rojo. Retira la pieza y presiona Restablecer." });
       return;
     }
     UIBanda.moverPieza(80, "centro", T.salida / this.velocidad);

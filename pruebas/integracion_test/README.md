@@ -7,6 +7,11 @@ siguiendo el ciclo de clasificación descrito en el proyecto (§5 y §8 del docu
 > **Estado:** compilado (`arduino-cli`, core esp32 3.3.12) y script de la Pi probado contra un ESP32
 > simulado (huecos, reenvíos, duplicados, alertas). **Todavía no se ha probado en el hardware real.**
 
+> **Relación con el sistema completo:** esta prueba usa una versión reducida del protocolo. El firmware final
+> (`firmware/banda_clasificadora`) y el servidor de la Pi (`rpi/servidor.py`) usan el
+> [protocolo ampliado](../../docs/protocolo-uart.md) (mismo checksum, más `LATIDO` con `ultimo_seq`, `CONTENEDORES`, `CAPACIDAD`, `PARO`, etc.).
+> El script `rpi/rpi_integracion_test.py` de esta carpeta sigue siendo el que corresponde a esta prueba.
+
 ## Cambios respecto a la versión anterior
 
 La versión anterior integraba también los dos sensores IR (inspección y salida), que el equipo ya sustituyó por HC-SR04. Se quitaron para aislar los tres módulos de esta prueba. Lo que hacían los elementos ausentes se sustituye así:

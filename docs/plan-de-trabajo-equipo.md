@@ -12,6 +12,88 @@
 
 ---
 
+## 0. Avance de implementación (actualizado el 9 de noviembre de 2026)
+
+> Las secciones 1 a 10 describen el estado **anterior** a este avance y se conservan como referencia. Esta sección
+> dice qué cambió. **Todo lo de esta tabla está probado solo en la PC** (pruebas automáticas y ESP32 emulado);
+> **nada se ha probado todavía en el hardware.**
+
+| Área | Qué hay ahora | Cómo se probó | Qué falta |
+|---|---|---|---|
+| Firmware final del ESP32 | `firmware/banda_clasificadora/` ([README](../firmware/README.md)): HC-SR04 por interrupciones, motor, compuerta, RC522, OLED, LEDs, buzzer activo, paro y Restablecer, contenedor lleno, watchdog, NVS, "sin supervisor" en la OLED | Compila; 90 verificaciones de la lógica pura en la PC (`firmware/test`) | Cargarlo y probarlo en la banda; medir los valores [PROVISIONAL] de `config.h` |
+| Pruebas de hardware que faltaban | `pruebas/oled_test`, `ultrasonico_test` (con calibración de umbral), `motor_test`, `paro_test`, `indicadores_test` | Compilan | Ejecutarlas y registrar evidencia en `conexiones.md §9` |
+| Protocolo UART | Formato A ampliado: [docs/protocolo-uart.md](protocolo-uart.md). Resuelve los 6 huecos de §4.2 | Pruebas en ambos lados con las mismas tramas | Probar con el ESP32 real conectado a la Pi |
+| Máquina de estados | [docs/maquina-de-estados.md](maquina-de-estados.md). Responde las preguntas de §4.3 | Compila | Confirmar la geometría (§4 de ese documento) y los tiempos |
+| Raspberry Pi | `rpi/` ([README](../rpi/README.md)): servidor (Python estándar + pyserial), SQLite, SSE, SYNC automático, épocas de `seq`, ESP32 emulado, servicio de systemd de ejemplo | 37 pruebas; prueba de punta a punta con el emulador y 30 % de tramas perdidas | Ejecutarlo en la Raspberry Pi |
+| Panel web | Modo UART (datos reales) cuando lo sirve `rpi/servidor.py`; simulador en otro caso o con `?demo`; capacidad configurable por contenedor ([README](../web/README.md)) | Probado en un navegador simulado (jsdom) en ambos modos | Probarlo en un navegador real con la Pi |
+
+**Decisiones tomadas por el equipo en esta etapa:** Formato A ampliado (pregunta 12), buzzer **activo** (pregunta 8),
+capacidad de contenedor **configurable desde el panel, inicial 15** (pregunta 14), servidor en **Python estándar + pyserial**.
+
+**Suposición que el módulo A debe confirmar:** todas las piezas pasan por el sensor de salida **antes** de la
+compuerta (`maquina-de-estados.md` §4).
+
+**Lo que sigue sin resolverse** (no depende del software): verificación del hardware y registro de evidencias
+(§3.1), mecánica y medidas (§3.4), las 50 pruebas del sistema (§3.5), documentación final, presupuesto y
+calendario (§3.6), y las preguntas 1–7, 9–11, 13 y 16 de §8.
+
+### 0.1 Reparto de lo que falta (actualizado el 9 de noviembre de 2026) [Recomendación]
+
+Lo que queda ya casi no es programar: es **montar, probar en hardware, medir y documentar**. Se mantienen los
+módulos A–D de §5.
+
+**A — Mecánica y calibración física**
+1. Construir la estructura: banda, soportes, compuerta y contenedores.
+2. **Confirmar la posición del sensor de salida** (el firmware supone que está **antes** de la compuerta,
+   `maquina-de-estados.md` §4). Va primero: si es distinto, C debe cambiar el código.
+3. Fijar el RC522 a 2 cm o menos de la pieza; definir dónde se pega la etiqueta en cada objeto.
+4. Medir las distancias inspección → salida y salida → contenedor, y el tamaño de las piezas.
+5. Con C: medir la velocidad de la banda y los tiempos [PROVISIONAL].
+
+**B — Electrónica y pruebas de módulo**
+1. Cablear según `conexiones.md` (fuente y tierras primero).
+2. Correr las pruebas en el orden de `conexiones.md` §7 (servo, NFC, OLED, ultrasónico, motor, paro,
+   indicadores, UART, todo junto).
+3. **Medir con multímetro el divisor de `Echo` antes de conectarlo al ESP32.**
+4. Llenar `conexiones.md` §9 con evidencia (foto, captura o medición).
+5. Confirmar modelo del ESP32, botón de paro NC y si el profesor acepta el paro por hardware.
+
+**C — Firmware del ESP32**
+1. Cargar `firmware/banda_clasificadora` cuando B tenga los módulos probados.
+2. Calibrar con A y pasar a `config.h`: umbrales HC-SR04 (`ultrasonico_test`, modo `c`), PWM, tiempos de
+   atasco, salida, retorno y paro, y ángulos del servo (`firmware/README.md` §6).
+3. Probar en la banda real los casos de error: sin etiqueta, no registrada, atasco, piezas juntas, contenedor
+   lleno, emergencia y corte de alimentación.
+4. Corregir lo que falle: el código todavía no ha corrido en la placa.
+
+**D — Raspberry Pi y panel**
+1. Preparar la Pi: sistema operativo, UART con `raspi-config`, pyserial y `servidor.py`. Opcional:
+   arranque automático con `rpi/banda.service`.
+2. Probar con el ESP32 real: piezas, ACK, SYNC, desconexión y reconexión, y reinicio del ESP32.
+3. Definir cómo se accede al panel: red de la universidad, punto de acceso de la Pi o cable.
+4. Probar el panel en navegadores reales (computadora y celular).
+5. Registrar las etiquetas reales (UID leídos con `nfc_test`).
+
+**Entre todos (al final)**
+- Pruebas del sistema (avance §8): 50 ciclos con piezas A, B y sin etiqueta, más los casos de error; exportar
+  el CSV del panel como evidencia.
+- Reporte: resultados, fotos, limitaciones (servo sin retroalimentación, el paro no corta el servo),
+  presupuesto real y cronograma.
+- Contestar las preguntas abiertas de §8 (fecha de entrega, componentes en mano, segundo ESP32, objetos a clasificar).
+
+**Orden y cuellos de botella** (hay un solo juego de hardware):
+
+```
+B (cableado + pruebas de módulo) ──► C (cargar firmware) ──► C + A (calibrar) ──► todos (50 pruebas)
+A (estructura, en paralelo) ───────────┘
+D (Pi + panel, en paralelo con el emulador) ──► D + C (ESP32 real con la Pi)
+```
+
+A y D pueden empezar ya sin bloquear a nadie (D con `rpi/emulador_esp32.py`). B es el primer cuello de
+botella: conviene que tenga el hardware primero y que los demás se turnen después.
+
+---
+
 ## 1. Resumen ejecutivo
 
 1. **Arquitectura definida [Repo: `docs/Avance2ProyectoFinal_Equipo 07.md`]:** ESP32 = control en tiempo real
@@ -89,10 +171,10 @@ físico** (marca/versión del clon que tengan). No es medición del equipo:
 | `pruebas/ir_test` | `.ino` (332 líneas) | Diagnóstico de los 2 IR midiendo milivoltios | **Obsoleto** (los IR se cambian por HC-SR04, §1.1) |
 | `pruebas/uart_test` | `.ino` + `.py` | PING/PONG ESP32 ↔ Pi | Escrito. Sin resultado registrado |
 | `pruebas/integracion_test` | `.ino` (822 l.) + `.py` (255 l.) | RC522 + servo + UART con protocolo con checksum, ACK, reenvío, SYNC, NVS | "Compilado; script de la Pi probado contra un ESP32 simulado; **no probado en hardware**". El simulador usado **no está en el repo** |
-| `web/` | HTML/CSS/JS sin dependencias | Panel de 5 pestañas + simulador del ESP32 | Prototipo visual. Servidor, UART real y BD **pendientes** (`web/README.md`) |
+| `web/` | HTML/CSS/JS sin dependencias | Panel de 5 pestañas + simulador del ESP32 | Prototipo visual. Servidor, UART real y BD **pendientes** (`web/README.md`) — *actualizado: ver §0* |
 
 Archivo a revisar: `pruebas/nfc_test/.pio/build/project.checksum` está versionado en git; es un artefacto de
-compilación de PlatformIO y normalmente no se sube [Recomendación: agregarlo a `.gitignore`].
+compilación de PlatformIO y normalmente no se sube. *Actualizado:* ya existe `.gitignore` con `.pio/`; el archivo se quitó del índice de git.
 
 ---
 
@@ -208,6 +290,9 @@ Resumen (no sustituye la tabla original):
 
 ### 4.2 Contrato del protocolo UART — hay una discrepancia que resolver
 
+> **Resuelto (§0):** el equipo eligió el Formato A ampliado. La especificación vigente es
+> [docs/protocolo-uart.md](protocolo-uart.md); lo que sigue se conserva como antecedente.
+
 Hay **dos formatos distintos** documentados:
 
 | | Formato A — implementado | Formato B — propuesto en `web/README.md §7` |
@@ -238,6 +323,8 @@ Tramas del Formato A [Repo: `pruebas/integracion_test/README.md`]:
 Entregable del contrato: un archivo `docs/protocolo-uart.md` con **todas** las tramas, campos, valores válidos y ejemplos. [Recomendación]
 
 ### 4.3 Contrato de la máquina de estados
+
+> **Resuelto (§0):** ver [docs/maquina-de-estados.md](maquina-de-estados.md). Los tiempos siguen [PROVISIONAL].
 
 Un diagrama único (estados, transiciones, quién las dispara, qué actuadores cambian) en `docs/maquina-de-estados.md`.
 Debe responder, como mínimo, estas preguntas que hoy el repo **no resuelve**:
@@ -442,13 +529,13 @@ conectado (B+C), contenedor lleno de extremo a extremo (C+D).
 5. **Cronograma:** ¿dónde está el archivo? ¿Qué hitos exige el profesor?
 6. ¿La Raspberry Pi 3 B funciona y tiene microSD en buen estado? ¿Qué SO tiene?
 7. **Botón de paro:** ¿es NC? ¿El profesor acepta el diseño de paro por hardware de `conexiones.md §5.7`?
-8. **Buzzer:** ¿activo o pasivo? **Modelo exacto del ESP32**. Los sensores ya son **HC-SR04** (confirmado): ¿el módulo trae `Echo` a 5 V (estándar) o a 3.3 V?
+8. **Buzzer:** ~~¿activo o pasivo?~~ **Resuelto: activo.** **Modelo exacto del ESP32**. Los sensores ya son **HC-SR04** (confirmado): ¿el módulo trae `Echo` a 5 V (estándar) o a 3.3 V?
 9. **Objetos a clasificar:** tamaño, peso, forma, material y dónde se pega la etiqueta. Con 7 etiquetas NTAG213 en la lista, ¿cuántos objetos físicos distintos se usarán en la demostración?
 10. **¿Cómo se accede al panel web** (red de la universidad, punto de acceso de la Pi, cable)?
 11. **Herramienta de firmware:** Arduino IDE / `arduino-cli` / PlatformIO (hoy conviven; los `platformio.ini` fijan `/dev/ttyUSB0`, que puede no coincidir en otras computadoras o sistemas).
-12. ¿Se acepta el **Formato A** del protocolo (§4.2)?
+12. ~~¿Se acepta el **Formato A** del protocolo (§4.2)?~~ **Resuelto:** Formato A ampliado ([protocolo-uart.md](protocolo-uart.md)).
 13. ¿Los resultados de `servo_test`, `nfc_test`, `ir_test` y `uart_test` ya se corrieron en físico? Si sí, hay que **registrarlos** (el repo no los tiene) y marcar la tabla de `conexiones.md §9`.
-14. ¿La capacidad de los contenedores (la simulación usa 15 piezas, un valor **inventado** según `web/README.md §6`) tiene un valor real definido por el equipo?
+14. **Resuelto:** configurable desde el panel, valor inicial 15. ~~¿La capacidad de los contenedores (la simulación usa 15 piezas, un valor **inventado** según `web/README.md §6`) tiene un valor real definido por el equipo?~~
 15. ~~Pines de `Trig`~~ **Resuelto:** GPIO14 y GPIO27; AIN1/AIN2 fijos (§1.1). El equipo confirmó que **no necesita reversa** de banda.
 16. ¿Ya compraron/tienen los dos HC-SR04 y las resistencias del divisor? ¿Qué distancia mínima de detección midieron (si ya los probaron)?
 
@@ -468,13 +555,13 @@ conectado (B+C), contenedor lleno de extremo a extremo (C+D).
 | Un solo juego de hardware para 4 personas | avance §9 | Todos | Emulador (D), turnos (B/C), segundo ESP32 si es viable |
 | HC-SR04: `Echo` a 5 V dañaría el GPIO; zona ciega vs. 2 cm del NFC; eco perdido con piezas pequeñas/inclinadas; interferencia entre los dos sensores | §1.1 (hoja de datos típica; **sin verificar**) | A + B | Divisor en `Echo`, medir distancia mínima real, mediciones alternadas, umbral y filtrado en firmware |
 | Banda sin reversa (AIN1/AIN2 fijos) y GPIO14 con pulso en el arranque | §1.1, `conexiones.md §3` | B + C | Verificar el sentido al cablear (intercambiar AO1/AO2 si hace falta); ignorar la medición de arranque; atasco se resuelve sin reversa |
-| Protocolo con dos formatos distintos | `web/README.md` vs. integración | C + D | Congelar Formato A (§4.2) |
+| Protocolo con dos formatos distintos | `web/README.md` vs. integración | C + D | **Resuelto:** Formato A ampliado (`docs/protocolo-uart.md`) |
 
 ---
 
 ## 10. Siguiente paso concreto [Recomendación]
 
 1. Reunión corta para contestar las preguntas de la sección 8 (en especial 1, 2, 3, 7, 9 y 12).
-2. Congelar los tres contratos (§4) y crear `docs/protocolo-uart.md` y `docs/maquina-de-estados.md`.
+2. ~~Congelar los tres contratos (§4) y crear `docs/protocolo-uart.md` y `docs/maquina-de-estados.md`.~~ Hecho (§0); revisarlos juntos y confirmar la geometría del sensor de salida.
 3. Repartir A, B, C, D y crear las ramas/carpetas de §6.
 4. Cada responsable ejecuta **primero** las pruebas que ya existen para su módulo y **registra el resultado** (foto, captura o medición) — hoy ninguna está registrada.

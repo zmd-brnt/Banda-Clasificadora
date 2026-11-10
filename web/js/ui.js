@@ -12,7 +12,8 @@ const pct = (n, total) => (total ? Math.round((n / total) * 100) : 0);
 const NIVEL_TXT = { critico: "▲ Crítico", advertencia: "● Advertencia", info: "ⓘ Info" };
 const ESTADO_TXT = {
   INACTIVO: "INACTIVO", ESPERA: "ESPERA", TRANSPORTE: "TRANSPORTE", LECTURA_NFC: "LECTURA NFC",
-  CLASIFICANDO: "CLASIFICANDO", CONFIRMA_SALIDA: "CONFIRMA SALIDA", PAUSA: "PAUSA",
+  CLASIFICANDO: "CLASIFICANDO", LIBERA_INSPECCION: "LIBERA INSPECCIÓN", CONFIRMA_SALIDA: "CONFIRMA SALIDA",
+  RETORNO: "RETORNO", PAUSA: "PAUSA",
   PAUSA_CONTENEDOR: "CONTENEDOR LLENO", ERROR: "ERROR", EMERGENCIA: "EMERGENCIA",
 };
 
@@ -94,7 +95,9 @@ const UI = {
     this.kpis(); this.estado(); this.enlace(); this.contenedores(); this.inventario();
     this.etiquetas(); this.desconocidos(); this.historial(); this.alertas();
     if (!Panel.historial.length && !Panel.alertas.length) {
-      $("#feed").innerHTML = `<li class="vacio">Aún no llegan eventos. Presiona <b>Iniciar simulación</b>.</li>`;
+      $("#feed").innerHTML = Panel.fuente === "uart"
+        ? `<li class="vacio">Aún no llegan eventos del ESP32.</li>`
+        : `<li class="vacio">Aún no llegan eventos. Presiona <b>Iniciar simulación</b>.</li>`;
     }
   },
 
@@ -124,7 +127,16 @@ const UI = {
     const etq = $("#etq-estado");
     etq.textContent = ESTADO_TXT[e] || e;
     etq.className = "etq-estado" + (e === "ERROR" || e === "EMERGENCIA" ? " error" : e.startsWith("PAUSA") ? " pausa" : "");
-    document.querySelectorAll("#pipeline li").forEach(li => li.classList.toggle("activo", li.dataset.estado === e));
+    document.querySelectorAll("#pipeline li").forEach(li => li.classList.toggle("activo", li.dataset.estado.split(" ").includes(e)));
+
+    // Con datos reales no se conoce la posición exacta de la pieza: solo se refleja el estado
+    if (Panel.fuente === "uart") {
+      UIBanda.motor(["ESPERA", "LIBERA_INSPECCION", "CONFIRMA_SALIDA", "RETORNO"].includes(e));
+      UIBanda.sensor("sen-ir1", e === "LECTURA_NFC" || e === "LIBERA_INSPECCION");
+      UIBanda.sensor("sen-nfc", e === "LECTURA_NFC");
+      UIBanda.sensor("sen-ir2", e === "CONFIRMA_SALIDA");
+      if (e === "ESPERA" || e === "RETORNO") UIBanda.compuerta("centro");
+    }
 
     const chip = $("#chip-maquina");
     chip.className = "chip " + ({ ERROR: "critico", EMERGENCIA: "critico", PAUSA: "advertencia", PAUSA_CONTENEDOR: "advertencia", INACTIVO: "" }[e] ?? "ok");
@@ -134,6 +146,11 @@ const UI = {
   enlace() {
     const chip = $("#chip-enlace");
     if (!Panel.fuente) { chip.className = "chip"; $("#txt-enlace").textContent = "Enlace: —"; return; }
+    if (Panel.fuente === "uart" && !Panel.servidorOk) {
+      chip.className = "chip critico";
+      $("#txt-enlace").textContent = "Sin conexión con la Raspberry Pi";
+      return;
+    }
     chip.className = "chip " + (Panel.enlaceOk ? "ok" : "critico");
     $("#txt-enlace").textContent = Panel.enlaceOk
       ? `Enlace UART OK${Panel.pendientesEsp32 ? ` · ${Panel.pendientesEsp32} pendientes` : ""}`
@@ -186,6 +203,10 @@ const UI = {
           <span class="nota">Contenedor: ${c.contenido} / ${c.capacidad}</span>
           ${estadoTxt}
           <button class="btn chico" data-vaciar="${k}">Marcar vaciado</button>
+        </div>
+        <div class="fila-cont">
+          <label class="nota">Capacidad <input type="number" min="1" max="999" value="${c.capacidad}" id="cap-${k}" style="width:5em"></label>
+          <button class="btn chico" data-capacidad="${k}">Aplicar</button>
         </div>
         ${k === "R" ? `<p class="nota" style="margin-top:8px">${Panel.conteos.SIN_LECTURA} sin leer · ${Panel.conteos.NO_REGISTRADA} no registradas</p>` : ""}
       </article>`;

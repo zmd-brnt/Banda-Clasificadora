@@ -1,0 +1,12 @@
+# Compilación
+.pio/
+build/
+firmware/test/build/
+
+# Python
+__pycache__/
+*.pyc
+
+# Datos generados en la Raspberry Pi
+rpi/*.db
+rpi/*.db-journal

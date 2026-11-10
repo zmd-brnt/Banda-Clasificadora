@@ -1,12 +1,14 @@
 # Panel web — Banda Clasificadora NFC
 
-Prototipo **visual** del panel de supervisión que correrá en la Raspberry Pi 3 Model B.
-Por ahora **no hay hardware ni comunicación UART conectados**: todos los datos los genera un
-**simulador del ESP32** dentro de la propia página. El objetivo es acordar cómo se verá el
-panel y cómo se organizarán los datos antes de escribir el servidor.
+Panel de supervisión que sirve la Raspberry Pi 3 Model B. Funciona de dos formas:
 
-> **Estado:** plantilla visual + simulador → **hecho**.
-> Servidor en la Raspberry Pi, lectura UART real y base de datos → **pendiente**.
+- **Modo UART (datos reales):** la página la sirve `rpi/servidor.py`. Los datos vienen del ESP32 por la UART y
+  se guardan en SQLite en la Pi; el panel los recibe en vivo (Server-Sent Events).
+- **Modo simulación:** si la página se abre sin ese servidor (doble clic, `python3 -m http.server`) o con
+  `?demo` en la URL, todos los datos los genera un **simulador del ESP32** dentro de la propia página.
+
+> **Estado:** ambos modos probados en un navegador simulado (jsdom) con el ESP32 emulado
+> (`rpi/emulador_esp32.py`). **Todavía no se ha probado con el ESP32 real ni en la Raspberry Pi.**
 
 ---
 
@@ -14,15 +16,22 @@ panel y cómo se organizarán los datos antes de escribir el servidor.
 
 No necesita instalar nada ni conexión a internet (no usa librerías externas).
 
+**Con datos reales** (en la Raspberry Pi, ver [rpi/README.md](../rpi/README.md)):
+```bash
+cd rpi
+python3 servidor.py           # abrir http://<ip-de-la-pi>:8080
+```
+El encabezado muestra **Datos reales (UART)**. Se ocultan los controles de simulación; queda el botón de paro
+(paro **por software**: el seguro es el botón físico). Arrancar y restablecer solo se hacen con el botón
+Restablecer de la banda.
+
+**Simulación:**
 ```bash
 # Opción A: doble clic en web/index.html
-
-# Opción B: servidor local (igual a como funcionará en la Raspberry Pi)
+# Opción B:
 cd web
-python3 -m http.server 8000
-# abrir http://localhost:8000
+python3 -m http.server 8000   # abrir http://localhost:8000
 ```
-
 Después presiona **▶ Iniciar simulación**.
 
 ---
@@ -90,14 +99,14 @@ web/
 └── js/
     ├── estado.js       # Modelo de datos del panel (lo que guardará la Raspberry Pi)
     ├── ui.js           # Dibuja el panel a partir del modelo; animación de la banda
-    ├── simulador.js    # ESP32 virtual (se elimina cuando haya hardware)
+    ├── simulador.js    # ESP32 virtual (solo se usa en modo simulación)
     └── main.js         # Conecta botones, pestañas y la fuente de datos
 ```
 
 **Idea clave del diseño:** todos los datos entran por **una sola función**,
 `Panel.recibir(mensaje)`, y todos los comandos salen por `Panel.enviar(comando)`.
-Hoy ambas están conectadas al simulador; para usar el hardware solo se cambia esa conexión
-en `main.js`, y el resto del panel queda igual.
+En modo simulación están conectadas al simulador; en modo UART `main.js` (`modoUart()`) las conecta a
+la API de la Pi (`api/eventos`, `api/comando`, `api/etiquetas`). El resto del panel es el mismo en ambos modos.
 
 ---
 
@@ -111,14 +120,21 @@ en `main.js`, y el resto del panel queda igual.
 | `ESTADO` | `ts`, `estado`, `detalle` | En cada cambio de la máquina de estados |
 | `LATIDO` | `ts`, `pendientes`, `version_tabla` | Cada 1 s |
 | `ALERTA` | `ts`, `nivel`, `codigo`, `mensaje` | Atasco, emergencia, contenedor lleno, etc. |
+| `CONTENEDORES` | ocupación y capacidad de A, B y R | Modo UART: cuando el ESP32 los reporta |
+| `ETIQUETAS` | tabla maestra y versión | Modo UART: al registrar o eliminar una etiqueta |
+| `ENLACE` | `ok` | Modo UART: la Pi detecta que el ESP32 dejó de (o volvió a) enviar latidos |
 
-Estados de la máquina: `ESPERA`, `TRANSPORTE`, `LECTURA_NFC`, `CLASIFICANDO`,
-`CONFIRMA_SALIDA`, `PAUSA`, `PAUSA_CONTENEDOR`, `ERROR`, `EMERGENCIA`.
+Estos son los mensajes **ya convertidos a JSON** que recibe `Panel.recibir()`. Las tramas que viajan por la
+UART están en [docs/protocolo-uart.md](../docs/protocolo-uart.md).
 
-Ejemplo de pieza:
+Estados de la máquina ([docs/maquina-de-estados.md](../docs/maquina-de-estados.md)): `PAUSA`, `ESPERA`,
+`LECTURA_NFC`, `CLASIFICANDO`, `LIBERA_INSPECCION`, `CONFIRMA_SALIDA`, `RETORNO`, `PAUSA_CONTENEDOR`, `ERROR`,
+`EMERGENCIA`. El simulador usa además `TRANSPORTE` (la pieza viaja hacia el sensor) para la animación.
+
+Ejemplo de pieza (en modo UART el panel usa además `epoca`, ver `docs/protocolo-uart.md` §5):
 
 ```json
-{ "tipo": "PIEZA", "seq": 42, "ts": 1761674400000, "uid": "04:A3:1F:B2:6C:80:00",
+{ "tipo": "PIEZA", "seq": 42, "ts": 1761674400000, "uid": "04A31FB26C8000",
   "categoria": "A", "motivo": null, "ciclo_ms": 4630 }
 ```
 
@@ -130,15 +146,22 @@ Ejemplo de pieza:
 | `REENVIAR` | `seqs[]` | Pide los mensajes que faltan |
 | `SYNC` | `version`, `tabla[]` | Envía la tabla maestra al ESP32 |
 | `VACIADO` | `categoria` | Reinicia el contador de ocupación de un contenedor |
+| `CAPACIDAD` | `categoria`, `capacidad` (1–999) | Cambia la capacidad de un contenedor (Inventario → campo de capacidad) |
+| `PARO` | — | Paro de emergencia por software |
 
-### 5.3 Datos que guarda el panel (futuras tablas SQLite)
+En modo UART, `ACK` y `REENVIAR` los resuelve el servidor de la Pi, no el navegador.
 
-| Tabla | Columnas |
+### 5.3 Datos que guarda la Raspberry Pi (SQLite, `rpi/banda/db.py`)
+
+| Tabla | Columnas principales |
 |---|---|
-| `etiquetas` | `uid` (PK), `nombre`, `categoria`, `registrada` |
-| `piezas` | `seq` (PK), `ts`, `uid`, `categoria`, `motivo`, `ciclo_ms`, `reenvio`, `recibido` |
-| `alertas` | `id`, `ts`, `nivel`, `codigo`, `mensaje`, `reconocida` |
+| `etiquetas` | `uid` (PK), `nombre`, `categoria` |
+| `piezas` | `epoca` + `seq` (únicos), hora de recepción, `uid`, `categoria`, `motivo`, `ciclo_ms`, `reenvio`, `tardio` |
+| `alertas` | hora, `nivel`, `codigo`, `mensaje`, `reconocida` |
 | `contenedores` | `categoria` (PK), `capacidad`, `contenido` |
+| `config` | `version_tabla`, `epoca` |
+
+En modo simulación todo vive en la memoria del navegador y se pierde al recargar.
 
 El **inventario** y los **conteos** no necesitan tabla propia: se calculan con consultas sobre
 `piezas` (por ejemplo `SELECT categoria, COUNT(*) FROM piezas GROUP BY categoria`).
@@ -152,10 +175,12 @@ El **inventario** y los **conteos** no necesitan tabla propia: se calculan con c
 | Flujo de 8 pasos, límite de 1.5 s, categorías A/B/rechazo, servo izquierda/centro/derecha | Documento de avance |
 | Tabla de errores (sin etiqueta, no registrada, atasco, enlace caído, duplicados, contenedor lleno, emergencia) | Documento de avance |
 | UID, categoría y número de secuencia en cada evento | Documento de avance |
-| Formato JSON, nombres de campos, comandos `ACK`/`REENVIAR`/`SYNC`/`VACIADO` | **Propuesta de este prototipo**; hay que acordarla |
+| Tramas UART | Formato A ampliado, acordado por el equipo (`docs/protocolo-uart.md`) |
+| Formato JSON interno del panel | Diseño de este panel (no viaja por la UART) |
 | Tiempos de la simulación (1.6 s de transporte, 1.2 s a la salida, etc.) | **Inventados** para que se vea fluido; se deben reemplazar con mediciones reales |
-| Capacidad de 15 piezas por contenedor, 7 % de piezas sin etiqueta | **Inventados** |
-| UIDs y nombres de objetos de ejemplo | **Inventados** |
+| Capacidad inicial de 15 piezas por contenedor | Decisión del equipo; configurable desde el panel |
+| 7 % de piezas sin etiqueta | **Inventado** |
+| UIDs y nombres de objetos de ejemplo (simulador y `rpi/emulador_esp32.py`) | **Inventados** |
 
 Ningún valor mostrado por el simulador es un resultado experimental.
 
@@ -163,52 +188,21 @@ Ningún valor mostrado por el simulador es un resultado experimental.
 
 ## 7. Mejoras por implementar
 
-### Siguientes pasos (para conectar el hardware)
+Ya hechas en esta etapa: formato de trama UART, servidor en la Pi con SQLite y SSE, conexión del panel a datos
+reales, hora asignada por la Pi, SYNC automático, manejo de reinicio del ESP32 (épocas de `seq`) y capacidad
+configurable por contenedor.
 
-1. **Definir el formato de trama UART.** Propuesta compacta y fácil de validar en el ESP32:
-   ```
-   $PZ,42,04A31FB26C8000,A,-,4630*CS\n     pieza   (seq, uid, cat, motivo, ciclo_ms)
-   $ST,LECTURA_NFC*CS\n                   estado
-   $HB,0,3*CS\n                           latido  (pendientes, versión de tabla)
-   $AL,C,ATASCO*CS\n                      alerta
-   $ACK,42*CS\n                           confirmación (Raspberry → ESP32)
-   ```
-   `*CS` es un checksum de 2 dígitos hex (XOR de los bytes entre `$` y `*`, como en NMEA) para descartar tramas corruptas.
-   Partir de `pruebas/uart_test/rpi/rpi_uart_test.py`, que ya abre `/dev/serial0`.
-2. **Servidor en la Raspberry Pi** (recomendado: Python + Flask, ligero para la Pi 3):
-   - Un hilo lee la UART, valida checksum, convierte a JSON y guarda en SQLite.
-   - `GET /api/estado` → conteos, contenedores, tabla maestra, últimas piezas (para cargar la página).
-   - `GET /api/eventos` → **Server-Sent Events** con cada mensaje nuevo (más simple que WebSockets).
-   - `POST /api/comando` → `SYNC`, `VACIADO`, etc. hacia la UART.
-3. **Cambiar la fuente de datos en `main.js`:**
-   ```js
-   const fuente = new EventSource("/api/eventos");
-   fuente.onmessage = (e) => Panel.recibir(JSON.parse(e.data));
-   Panel.fuente = "uart";
-   Panel.enviar = (cmd) => fetch("/api/comando", { method: "POST",
-     headers: { "Content-Type": "application/json" }, body: JSON.stringify(cmd) });
-   ```
-   y quitar `simulador.js` del HTML (o dejarlo detrás de un parámetro `?demo`).
-4. **Hora de los eventos.** El ESP32 no tiene reloj de tiempo real: debe enviar `millis()` y
-   la Raspberry Pi asignar la fecha y hora al recibir. Para eventos reenviados tras una
-   desconexión, calcular la hora con la diferencia de `millis()` respecto al último latido.
-5. **Persistencia.** Hoy todo vive en la memoria del navegador y se pierde al recargar.
-   Con SQLite en la Raspberry Pi el historial sobrevive reinicios.
-6. **Sincronizar al arrancar.** Al iniciar, la Raspberry Pi compara su `version_tabla` con la del
-   latido del ESP32 y envía `SYNC` automáticamente si difieren.
+### Mejoras de funcionalidad (pendientes)
 
-### Mejoras de funcionalidad
-
-- Recuperación tras reinicio del ESP32: que reporte en el latido sus contadores guardados en NVS y el último `seq`, para que el panel no confunda un reinicio (`seq` vuelve a 1) con duplicados.
-- Editar categoría de una etiqueta existente (hoy hay que eliminar y volver a registrar).
+- Editar categoría de una etiqueta existente: hoy se registra de nuevo el mismo UID con otra categoría (la Pi la reemplaza).
 - Registrar etiquetas acercándolas al lector (modo "aprender UID") en lugar de escribirlas a mano.
-- Configurar desde el panel la capacidad de cada contenedor y los nombres de las categorías.
+- Nombres de las categorías configurables.
 - Gráfica de piezas por minuto y de tiempo de ciclo a lo largo del tiempo.
 - Resumen automático de las pruebas de sistema: aciertos, rechazos, lecturas fallidas y tiempo de ciclo promedio sobre un rango de `seq`.
-- Usuario/contraseña sencillos para las acciones que modifican la tabla maestra.
+- Usuario/contraseña sencillos para las acciones que modifican la tabla maestra (hoy cualquiera en la red puede usar el panel).
 
-### Limitaciones conocidas del prototipo
+### Limitaciones conocidas
 
-- La animación de la banda solo existe en simulación; con datos reales se puede animar a partir de los mensajes `ESTADO`, pero no mostrará la posición exacta de la pieza.
-- La inyección "Contenedor A lleno" modifica directamente el contador del panel y del ESP32 virtual (atajo de simulación).
-- La pausa se aplica al terminar la pieza en curso, no a mitad del recorrido.
+- En modo UART la animación de la banda sigue el **estado** del ESP32, no la posición real de la pieza.
+- Para piezas que llegan tarde (tras una desconexión) la hora es la de recepción en la Pi, no la de clasificación.
+- En simulación, la inyección "Contenedor A lleno" modifica directamente el contador del panel y del ESP32 virtual (atajo de simulación); la pausa se aplica al terminar la pieza en curso.

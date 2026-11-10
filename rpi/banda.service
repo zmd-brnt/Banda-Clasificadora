@@ -1,0 +1,15 @@
+# Unidad de systemd de ejemplo: arranca el supervisor al encender la Raspberry Pi.
+# Ajusta User y las rutas a donde clonaste el repositorio. Ver rpi/README.md §2.
+[Unit]
+Description=Supervisor de la banda clasificadora
+After=network.target
+
+[Service]
+User=pi
+WorkingDirectory=/home/pi/Banda-Clasificadora/rpi
+ExecStart=/usr/bin/python3 /home/pi/Banda-Clasificadora/rpi/servidor.py
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
