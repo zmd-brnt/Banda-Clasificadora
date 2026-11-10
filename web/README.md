@@ -46,11 +46,11 @@ En el encabezado siempre se ven tres indicadores: **modo** (simulación o datos 
 
 La barra superior controla un ESP32 virtual que sigue el flujo del documento de avance:
 
-1. **Transporte** → la pieza avanza hasta el IR de inspección.
+1. **Transporte** → la pieza avanza hasta el sensor de inspección (HC-SR04).
 2. **Lectura NFC** → la banda se detiene; el RC522 tiene **1.5 s** para leer el UID.
 3. **Consulta de la tabla local** → categoría A, B, o rechazo (sin lectura / no registrada).
 4. **Compuerta** → servo a izquierda (A), derecha (B) o centro (rechazo).
-5. **Confirma salida** → la banda reanuda y el IR de salida confirma el paso.
+5. **Confirma salida** → la banda reanuda y el sensor de salida (HC-SR04) confirma el paso.
 6. Se actualizan los contadores y se envía el evento a la Raspberry Pi con **número de secuencia**.
 
 | Control | Qué hace |

@@ -19,6 +19,8 @@ Grupo: 01	Semestre 2027-1
 
 Fecha de entrega : 27 de Octubre 2026
 
+> **Nota posterior a la entrega (no forma parte del texto entregado):** el equipo sustituyó los dos sensores infrarrojos (FC-51) por dos sensores ultrasónicos **HC-SR04**, y los pines GPIO14/GPIO27 pasaron a ser `Trig`, con AIN1/AIN2 del TB6612 fijos por cableado (sin reversa de banda). Donde este documento dice "infrarrojo" o "IR", léase HC-SR04. Detalle vigente en [conexiones.md](conexiones.md).
+
 ## ***1\. Introducción***
 
 Desarrollaremos un sistema embebido que clasifica objetos en tiempo real sobre una banda transportadora a partir de una etiqueta NFC adherida a cada pieza. El ESP32 es el nodo de tiempo real que atenderá tareas en tiempo real y tendrá control sobre elementos como el sensor infrarrojo encargado de detectar la llegada del objeto, el movimiento de los motores propios de la banda y de aquellos que posicionan la compuerta que desvía la pieza a su contenedor, el lector RC522 lee el UID de la etiqueta y finalmente tendrá control sobre la pantalla OLED.

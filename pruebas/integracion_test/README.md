@@ -2,25 +2,24 @@
 
 Comprueba que el lector RC522, el servo SG90 y el enlace UART con la Raspberry Pi funcionan **juntos**
 siguiendo el ciclo de clasificación descrito en el proyecto (§5 y §8 del documento de avance).
-**No usa los sensores IR, el motor ni la banda:** la pieza (una etiqueta NFC) se acerca y se retira a mano.
+**No usa los sensores de presencia (hoy HC-SR04; antes IR), el motor ni la banda:** la pieza (una etiqueta NFC) se acerca y se retira a mano.
 
 > **Estado:** compilado (`arduino-cli`, core esp32 3.3.12) y script de la Pi probado contra un ESP32
 > simulado (huecos, reenvíos, duplicados, alertas). **Todavía no se ha probado en el hardware real.**
 
 ## Cambios respecto a la versión anterior
 
-La versión anterior integraba también los dos IR (inspección y salida). Se quitaron para aislar los tres
-módulos de esta prueba. Lo que hacían los elementos ausentes se sustituye así:
+La versión anterior integraba también los dos sensores IR (inspección y salida), que el equipo ya sustituyó por HC-SR04. Se quitaron para aislar los tres módulos de esta prueba. Lo que hacían los elementos ausentes se sustituye así:
 
 | Elemento del proyecto | En esta prueba |
 |---|---|
-| IR de inspección detecta la pieza | La etiqueta **entra al campo del lector**. Para una pieza **sin etiqueta**, el comando `p` |
+| Sensor de inspección (HC-SR04) detecta la pieza | La etiqueta **entra al campo del lector**. Para una pieza **sin etiqueta**, el comando `p` |
 | Motor: banda se detiene / reanuda | Solo mensajes `[Banda] Detenida` / `[Banda] En marcha` en el Monitor Serial |
 | La banda saca la pieza de la inspección | **Retirar la etiqueta del lector** a mano |
-| IR de salida confirma el paso | Tiempo fijo de tránsito: 2 s (`TRANSITO_MS`) después de retirar la pieza |
-| Atasco (IR de inspección bloqueado) | La etiqueta sigue en el lector **10 s** después de clasificarla |
-| Doble lectura (IR sin liberarse) | La etiqueta ya leída queda en *HALT* y no vuelve a disparar el ciclo hasta que sale del campo |
-| Piezas muy juntas (IR se reactiva) | Entra otra etiqueta antes de que la compuerta vuelva al centro → `ALERTA,PIEZAS_JUNTAS` |
+| Sensor de salida (HC-SR04) confirma el paso | Tiempo fijo de tránsito: 2 s (`TRANSITO_MS`) después de retirar la pieza |
+| Atasco (sensor de inspección bloqueado) | La etiqueta sigue en el lector **10 s** después de clasificarla |
+| Doble lectura (sensor de inspección sin liberarse) | La etiqueta ya leída queda en *HALT* y no vuelve a disparar el ciclo hasta que sale del campo |
+| Piezas muy juntas (sensor de inspección se reactiva) | Entra otra etiqueta antes de que la compuerta vuelva al centro → `ALERTA,PIEZAS_JUNTAS` |
 | Botón de paro / Restablecer | Comandos `e` / `r` del Monitor Serial |
 
 Además se añadió, para acercarse al protocolo que ya espera el panel web (`web/js/estado.js`):
@@ -29,7 +28,7 @@ Además se añadió, para acercarse al protocolo que ya espera el panel web (`we
 - La Pi pide `REENVIAR,<seq>` cuando detecta un hueco en la secuencia.
 - Alertas `EMERGENCIA`, `RESTABLECIDO` y `PIEZAS_JUNTAS`.
 - Conteo A/B/R y "sin leer" guardado en NVS (sobrevive a reinicios, como pide §8 del documento).
-- Se quitaron `SIN_SALIDA` (no hay IR de salida) y los pines GPIO34/35.
+- Se quitaron `SIN_SALIDA` (no hay sensor de salida) y los pines GPIO34/35 (ahora `Echo` de los HC-SR04).
 
 ## Requisitos previos
 
@@ -87,7 +86,7 @@ Comandos del Monitor Serial:
 
 | Tecla | Acción |
 |---|---|
-| `p` | Llega una pieza **sin etiqueta** (simula el IR de inspección) |
+| `p` | Llega una pieza **sin etiqueta** (simula el sensor de inspección) |
 | `e` | Paro de emergencia: compuerta al centro, la pieza en curso no se registra |
 | `r` | Restablecer tras `ATASCO` o `EMERGENCIA` (el lector debe estar libre) |
 | `s` | Estado: ciclo, enlace, seq, pendientes, tabla, conteos, tramas inválidas |
@@ -140,11 +139,11 @@ el problema es la alimentación (capacitor y rama de potencia, §2 de `conexione
 
 ## Limitaciones (decirlas en el reporte)
 
-- **No hay IR de salida:** la confirmación de salida es un tiempo fijo, no una medición. Esta prueba **no**
+- **No hay sensor de salida:** la confirmación de salida es un tiempo fijo, no una medición. Esta prueba **no**
   puede detectar una pieza que se quede atorada entre la compuerta y el contenedor; eso se valida cuando
-  se integren los IR.
-- **El lector hace de IR de inspección:** una pieza sin etiqueta no se detecta sola, por eso existe `p`.
-  En el sistema real, el IR dispara la lectura y el RC522 solo identifica.
+  se integren los HC-SR04.
+- **El lector hace de sensor de inspección:** una pieza sin etiqueta no se detecta sola, por eso existe `p`.
+  En el sistema real, el HC-SR04 de inspección dispara la lectura y el RC522 solo identifica.
 - **Sin motor:** `TRANSITO_MS` (2 s) y el `ciclo_ms` reportado incluyen el tiempo de tu mano; no son
   tiempos reales de la banda. Habrá que recalcularlos con la velocidad de la banda y la distancia
   lector–compuerta.

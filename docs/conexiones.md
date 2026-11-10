@@ -2,9 +2,12 @@
 
 Guía para alambrar el prototipo y probarlo módulo por módulo.
 
-> **Estado:** asignación de pines **propuesta**, todavía sin probar en hardware.
+> **Estado:** asignación de pines **propuesta**, todavía sin registro de pruebas en este documento.
+> Cambios de diseño decididos por el equipo y reflejados aquí: **los dos sensores IR (FC-51) se sustituyen por dos HC-SR04**,
+> y **GPIO14/GPIO27 pasan a ser `Trig`** de esos sensores, por lo que **AIN1/AIN2 del TB6612 se fijan por cableado** (la banda solo avanza).
 > Respeta los pines que ya usan las pruebas de `pruebas/`, salvo **RC522 RST, que pasa de GPIO22 a GPIO4**
 > para dejar GPIO22 libre como SCL de la OLED (ver §8).
+> Los valores del HC-SR04 de este documento (5 V, `Echo` de 5 V, rango, haz) son de hoja de datos típica y **deben comprobarse con su módulo**.
 > Cada vez que algo se verifique físicamente, márcalo en la tabla de verificación (§9).
 
 ---
@@ -16,8 +19,8 @@ Guía para alambrar el prototipo y probarlo módulo por módulo.
 | Modelo exacto del ESP32 DevKit (30 pines, chip CH340)                         | Los números GPIO son los mismos, pero la **posición física** de los pines cambia. Conecta siempre por la **etiqueta serigrafiada (GPIOxx / Dxx)**, no por la posición. |
 | Si la placa tiene diodo entre USB y el pin `VIN`/`5V`                         | Define si se puede tener conectado el USB y la fuente externa al mismo tiempo (§2.3).                                                                                  |
 | Tipo de buzzer: **activo** (suena con voltaje DC) o **pasivo** (necesita PWM) | Cambia el código; el cableado de este documento sirve para los dos.                                                                                                    |
-| Modelo del sensor IR (el documento dice FC-51)                                | La lógica de salida (activa en bajo) y el voltaje dependen del módulo.                                                                                                 |
-| Tipo de botón de paro: normalmente **cerrado** (NC)                           | El esquema de §5.7 n2ecesita un contacto NC. Si solo tienen NO, avisar: cambia el diseño.                                                                              |
+| Versión del **HC-SR04** (clon): si su `Echo` es de **5 V** (lo habitual) o de 3.3 V | Si es de 5 V, el divisor de §5.3 es **obligatorio**. Medir `Echo` con multímetro antes de conectarlo al ESP32 |
+| Tipo de botón de paro: normalmente **cerrado** (NC)                           | El esquema de §5.7 necesita un contacto NC. Si solo tienen NO, avisar: cambia el diseño.                                                                              |
 
 ---
 
@@ -41,8 +44,6 @@ Guía para alambrar el prototipo y probarlo módulo por módulo.
           ▼                                                 │
    ESP32 VIN (5V) ──► regulador interno ──► 3V3 ──┬── RC522 3.3V
                                                   ├── OLED VCC
-                                                  ├── IR inspección VCC
-                                                  ├── IR salida VCC
                                                   ├── TB6612 VCC (lógica)
                                                   └── pull-ups (botones)
    ESP32 GND ─────────────────────────────────────────────── GND común
@@ -51,6 +52,8 @@ Guía para alambrar el prototipo y probarlo módulo por módulo.
    Raspberry Pi GND (pin 6) ─────────────────────────────────┘  (vía el hilo GND de la UART)
 ```
 
+La **rama lógica de 5 V** (la que entra por `VIN`) también alimenta el `VCC` de los **dos HC-SR04**; sus `Echo` van al ESP32 solo a través del divisor de §5.3.
+
 ### 2.2 Reglas
 
 1. **Tierra común:** ESP32, fuente de 5 V, TB6612, servo, sensores, OLED, RC522 y Raspberry Pi comparten GND. Sin tierra común, la UART y el PWM del servo no funcionan.
@@ -58,7 +61,7 @@ Guía para alambrar el prototipo y probarlo módulo por módulo.
 3. **Los dos ramales salen de la bornera de la fuente**, no uno "colgado" del otro. Así la caída de voltaje que provoca el servo al arrancar no llega directo al ESP32 (problema 2 del documento de avance).
 4. **Capacitor de 1000 µF (mínimo 470 µF), 16 V o más,** entre +5V y GND de la rama de potencia, lo más cerca posible del servo. **Respeta la polaridad**: la franja del electrolítico es el negativo.
 5. **Capacitor cerámico de 100 nF** soldado entre las dos terminales del motor TT, para reducir el ruido eléctrico de las escobillas.
-6. **RC522, OLED y sensores IR a 3.3 V.** El RC522 se daña con 5 V. Con los IR a 3.3 V su salida ya es de 3.3 V y **no hace falta divisor de voltaje** (el documento menciona el divisor como alternativa si se alimentan a 5 V).
+6. **RC522 y OLED a 3.3 V; HC-SR04 a 5 V.** El RC522 se daña con 5 V. Los dos HC-SR04 se alimentan de la **rama lógica de 5 V** (no de 3V3) y su pin `Echo` entrega **5 V**, que **no debe llegar directo al ESP32** (sus GPIO son de 3.3 V): cada `Echo` pasa por un **divisor de voltaje** (§5.3). `Trig` es una salida de 3.3 V del ESP32; el HC-SR04 típico la reconoce, pero se comprueba en la prueba.
 
 ### 2.3 USB y fuente externa al mismo tiempo
 
@@ -72,7 +75,7 @@ Guía para alambrar el prototipo y probarlo módulo por módulo.
 | ESP32 (WiFi apagado) | 50–80 mA | Lógica |
 | RC522 | 15–30 mA | 3.3 V |
 | OLED 0.96" | 10–20 mA | 3.3 V |
-| 2× IR FC-51 | 20–40 mA | 3.3 V |
+| 2× HC-SR04 | ~15 mA c/u (típico) | **5 V lógica** |
 | LEDs (3) | ~5 mA c/u | 3.3 V |
 | Servo SG90 | 100–250 mA moviéndose, **picos de ~650 mA** | Potencia |
 | Motor TT a 5 V | 150–250 mA, **arranque/bloqueo ~1 A** | Potencia |
@@ -92,12 +95,12 @@ Total en el peor caso: ~2 A → la fuente de **3 A** da margen. Son valores típ
 | **4**  | Salida | RC522 RST | **Antes GPIO22**, se movió para liberar el I2C |
 | **21** | E/S | OLED SDA | I2C por defecto de Arduino-ESP32 |
 | **22** | Salida | OLED SCL | I2C por defecto de Arduino-ESP32 |
-| **34** | Entrada | IR inspección OUT | Solo entrada, **sin pull-up interno** (el módulo FC-51 ya trae el suyo) |
-| **35** | Entrada | IR salida OUT | Solo entrada, sin pull-up interno |
+| **34** | Entrada | HC-SR04 inspección **Echo** (vía divisor) | Solo entrada, sin pull-up interno. **Nunca 5 V directo** |
+| **35** | Entrada | HC-SR04 salida **Echo** (vía divisor) | Solo entrada, sin pull-up interno. **Nunca 5 V directo** |
 | **13** | Salida PWM | Servo señal | Ya usado en `servo_test` |
 | **26** | Salida PWM | TB6612 PWMA | Velocidad de la banda |
-| **14** | Salida | TB6612 AIN1 | Dirección. Emite un pulso al arrancar; no mueve el motor porque STBY está en BAJO (§5.7) |
-| **27** | Salida | TB6612 AIN2 | Dirección |
+| **14** | Salida | HC-SR04 inspección **Trig** | Antes AIN1. Emite un pulso al arrancar: solo provoca una medición espuria que el firmware debe ignorar |
+| **27** | Salida | HC-SR04 salida **Trig** | Antes AIN2 |
 | **25** | Salida | Botón de paro → TB6612 STBY | Habilita el motor **pasando por el contacto NC del botón** (§5.7) |
 | **39** | Entrada | Detección del paro (nodo STBY) | Solo entrada; con pull-down externo de 10 kΩ |
 | **36** | Entrada | Botón **Restablecer** | Solo entrada; con pull-up externo de 10 kΩ |
@@ -114,7 +117,7 @@ Total en el peor caso: ~2 A → la fuente de **3 A** da margen. Son valores típ
 - **GPIO 12:** si está en ALTO al encender, el ESP32 no arranca.
 - **GPIO 0:** botón BOOT.
 
-Libres de reserva: ninguno cómodo. Si se necesita otro pin, la opción más fácil es fijar AIN1/AIN2 a 3.3 V/GND (la banda solo avanza hacia adelante) y liberar GPIO14 y GPIO27.
+Libres de reserva: ninguno cómodo. GPIO14 y GPIO27 ya no están disponibles: ahora son `Trig`. **Consecuencia:** AIN1 y AIN2 del TB6612 van fijos por cableado (§5.5) y la banda **no tiene reversa**. Cualquier función nueva que necesite un pin de salida exige otra decisión.
 
 ---
 
@@ -170,17 +173,33 @@ Libres de reserva: ninguno cómodo. Si se necesita otro pin, la opción más fá
 - Dirección I2C habitual: `0x3C` (algunas son `0x3D`). Se confirma con un escáner I2C.
 - **Revisa el orden de los pines en tu módulo**: algunos traen VCC y GND invertidos.
 
-### 5.3 Sensores IR de obstáculo (FC-51)
+### 5.3 Sensores ultrasónicos HC-SR04 (reemplazan a los IR FC-51)
 
-| FC-51 | IR inspección | IR salida |
+| HC-SR04 | Sensor inspección | Sensor salida |
 |---|---|---|
-| VCC | 3V3 | 3V3 |
-| GND | GND | GND |
-| OUT | **GPIO34** | **GPIO35** |
+| VCC | **+5 V rama lógica** | **+5 V rama lógica** |
+| GND | GND común | GND común |
+| Trig | **GPIO14** | **GPIO27** |
+| Echo | **GPIO34**, vía divisor | **GPIO35**, vía divisor |
 
-- Salida **activa en BAJO**: `LOW` = hay objeto, `HIGH` = libre. El LED del módulo se enciende al detectar.
-- Ajustar el potenciómetro azul para que detecte la pieza a la distancia real de montaje y **no** detecte la banda ni la estructura.
-- La luz solar directa y las superficies negras mates afectan la detección: probar con las piezas reales.
+**Divisor de voltaje en cada `Echo`** (de 5 V a un nivel seguro para el ESP32):
+
+```
+HC-SR04 Echo ──[1 kΩ]──┬────► GPIO34 (o GPIO35)
+                       │
+                     [2 kΩ]   (o dos de 1 kΩ en serie)
+                       │
+                      GND
+```
+
+- Con 1 kΩ y 2 kΩ, un `Echo` de 5 V llega al pin en ~3.3 V (relación 2/3). **Mide con el multímetro** ese nodo antes de conectarlo al ESP32.
+- Si el `Echo` de su módulo ya es de 3.3 V, el divisor no es necesario (comprobarlo, no suponerlo).
+- `Trig` no necesita divisor: es salida del ESP32.
+- **Funcionamiento (hoja de datos típica, por verificar):** un pulso corto (~10 µs) en `Trig` y el `Echo` dura proporcional a la distancia; el firmware mide ese tiempo y compara con un **umbral en cm**. No hay `LOW/HIGH` de "objeto detectado" ni potenciómetro de ajuste.
+- **Mide los dos sensores alternados, no a la vez**, para evitar que uno capte el eco del otro. Oriéntalos para que no se apunten entre sí.
+- Hay una **distancia mínima** de detección y un haz cónico: comprueba con la pieza real que se mide bien al colocarla donde el RC522 la lee (~2 cm) y que el sensor **no** detecte la banda ni la estructura.
+- Las piezas pequeñas, blandas o inclinadas pueden no devolver eco: prueba con las piezas reales.
+- El pulso de GPIO14 al arrancar (§3) puede disparar una medición falsa; el firmware debe descartar las primeras mediciones.
 
 ### 5.4 Servomotor SG90
 
@@ -201,8 +220,8 @@ Libres de reserva: ninguno cómodo. Si se necesita otro pin, la opción más fá
 | VCC | 3V3 del ESP32 |
 | GND (cualquiera de los 3) | GND común |
 | PWMA | GPIO26 |
-| AIN1 | GPIO14 |
-| AIN2 | GPIO27 |
+| AIN1 | **3.3 V (fijo)** — ya no va a un GPIO |
+| AIN2 | **GND (fijo)** — ya no va a un GPIO |
 | STBY | Nodo del botón de paro (§5.7) |
 | AO1, AO2 | Terminales del motor TT |
 | PWMB, BIN1, BIN2, BO1, BO2 | Sin conectar (canal B no usado) |
@@ -217,8 +236,10 @@ Tabla de control (canal A):
 | L | L | x | Libre |
 | x | x | x | **STBY = L → motor apagado** |
 
+> Con AIN1/AIN2 fijos solo aplica la **primera fila**. Las demás se conservan como referencia del driver.
+
 - VM mínimo del TB6612: 4.5 V. Si la fuente cae por debajo al moverse el servo, el driver se apaga: otra razón para usar el capacitor de §2.2.
-- Si la banda avanza al revés, intercambia AO1 y AO2 (o AIN1 y AIN2 en el código).
+- **No hay reversa ni freno por software:** con AIN1 = H y AIN2 = L fijos (§ tabla, primera fila) el motor solo avanza; solo se controlan `PWMA` y `STBY`. Si la banda avanza al revés, **intercambia AO1 y AO2** en el motor (ya no se puede corregir en código).
 
 ### 5.6 LEDs y buzzer
 
@@ -288,7 +309,8 @@ Lo usa el estado de error ("hasta presionar reinicio" en la tabla de errores del
 |---|---|
 | Resistencias 330 Ω | 3 |
 | Resistencias 10 kΩ | 2 |
-| Resistencia 1 kΩ | 1 |
+| Resistencias 1 kΩ | 3 (1 del buzzer + 2 del divisor de `Echo`) |
+| Resistencias 2 kΩ (o 2 de 1 kΩ en serie cada una) | 2 (divisor de `Echo`) |
 | Transistor NPN 2N2222 o BC547 | 1 |
 | Capacitor electrolítico 470–1000 µF, ≥16 V | 1 |
 | Capacitores cerámicos 100 nF | 2–3 |
@@ -310,8 +332,8 @@ Conecta y prueba **un módulo a la vez**. No pases al siguiente hasta que el ant
 | 2 | Servo | `servo_test` | 3 posiciones repetibles; el ESP32 no se reinicia | `pruebas/servo_test` |
 | 3 | RC522 | `nfc_test` (**actualizado a RST = GPIO4**) | Firmware `0x91`/`0x92`; mismo UID en cada lectura; UID de 7 bytes con las NTAG213 | `pruebas/nfc_test` |
 | 4 | OLED | Escáner I2C, luego un texto | Aparece la dirección `0x3C`/`0x3D`; se ve el texto | **Falta** |
-| 5 | IR × 2 | Leer GPIO34/35 por el Monitor Serial | Cambian de 1 a 0 al pasar la pieza, a la altura real de montaje | **Falta** |
-| 6 | Motor + TB6612 | PWM al 30, 60 y 100 %; ambos sentidos | El motor gira y cambia de velocidad; el ESP32 no se reinicia | **Falta** |
+| 5 | HC-SR04 × 2 | **Antes de conectar:** alimentar a 5 V y medir con multímetro el voltaje de `Echo` y de la salida del divisor. Luego leer la distancia por el Monitor Serial | `Echo` llega al ESP32 a ≤3.3 V; distancia con banda libre estable; cambia claramente al pasar la pieza real; un sensor no capta al otro; distancia mínima medida y compatible con la geometría | **Falta** (`ir_test` ya no aplica) |
+| 6 | Motor + TB6612 | PWM al 30, 60 y 100 % con AIN1/AIN2 fijos (solo avanza); confirmar el sentido | El motor gira **hacia adelante** y cambia de velocidad; si gira al revés, intercambiar AO1/AO2; el ESP32 no se reinicia | **Falta** |
 | 7 | Paro de emergencia | Con el motor girando, presionar el botón | El motor se detiene **aunque el programa no haga nada**; GPIO39 cambia a 0 | **Falta** |
 | 8 | LEDs, buzzer, Restablecer | Encender cada salida y leer el botón | Cada LED y el buzzer funcionan; GPIO36 cambia al presionar | **Falta** |
 | 9 | UART con Raspberry Pi | `uart_test` en ambos lados | PING/PONG con la secuencia correcta durante 5 minutos sin errores | `pruebas/uart_test` |
@@ -327,12 +349,17 @@ El paso 10 es el que valida el problema de caída de voltaje del avance. Si fall
 |---|---|---|
 | `pruebas/nfc_test/nfc_test.ino` | `RST_PIN` 22 → **4** | GPIO22 es el SCL por defecto del I2C, necesario para la OLED |
 | `servo_test`, `uart_test` | Sin cambios | — |
+| `pruebas/ir_test/ir_test.ino` | **Obsoleto** | Los IR se sustituyen por HC-SR04 |
+| Prueba nueva de HC-SR04 | **Pendiente de escribir** (p. ej. `pruebas/ultrasonico_test`) | Medir distancia, umbral, `Echo` a 3.3 V, interferencia entre sensores |
+| `esp32_integracion_test.ino` | Sin cambios por ahora | No usa sensores ni motor; los pines GPIO14/27 que libera esta decisión aún no se usan en ese código |
 
 ---
 
 ## 9. Tabla de verificación
 
 Llenar conforme se prueba. Una conexión no se marca como verificada sin evidencia (foto, captura del Monitor Serial o medición).
+
+> **Nota:** el equipo indica que ya probó en físico el servo, el RC522 y la UART con la Raspberry Pi, pero **aquí no hay evidencia registrada**. Cuando tengan la captura, foto o medición, marquen la fila y anoten fecha y enlace al archivo.
 
 | Módulo                | Conectado | Probado | Fecha | Evidencia / notas |
 | --------------------- | --------- | ------- | ----- | ----------------- |
@@ -341,8 +368,8 @@ Llenar conforme se prueba. Una conexión no se marca como verificada sin evidenc
 | Servo SG90            | ☐         | ☐       |       |                   |
 | RC522                 | ☐         | ☐       |       |                   |
 | OLED                  | ☐         | ☐       |       |                   |
-| IR inspección         | ☐         | ☐       |       |                   |
-| IR salida             | ☐         | ☐       |       |                   |
+| HC-SR04 inspección    | ☐         | ☐       |       |                   |
+| HC-SR04 salida        | ☐         | ☐       |       |                   |
 | TB6612 + motor        | ☐         | ☐       |       |                   |
 | Paro de emergencia    | ☐         | ☐       |       |                   |
 | LEDs / buzzer         | ☐         | ☐       |       |                   |
