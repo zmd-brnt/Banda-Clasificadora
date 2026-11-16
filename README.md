@@ -6,6 +6,7 @@ Creación de un sistema de clasificación de objetos usando lector de NFC.
 - `firmware/` — programa final del ESP32 (máquina de estados, HC-SR04, RC522, motor, compuerta, OLED, UART) y sus pruebas en la PC. Ver [firmware/README.md](firmware/README.md).
 - `rpi/` — servidor de la Raspberry Pi: UART, base de datos SQLite y panel web en vivo; incluye un ESP32 emulado y pruebas. Ver [rpi/README.md](rpi/README.md).
 - `web/` — panel web; funciona con datos reales (servido por `rpi/servidor.py`) o como simulador. Ver [web/README.md](web/README.md).
+- `web2/` — panel web nuevo **Triar** (laptop y teléfono), con datos reales o modo demostración propio. Se sirve con `python3 servidor.py --web ../web2`. Ver [web2/README.md](web2/README.md). Marca en [docs/marca/](docs/marca/README.md).
 - `pruebas/` — pruebas de módulos individuales en el hardware. Ver [pruebas/README.md](pruebas/README.md).
 - `docs/` — documentos de avance, [conexiones del hardware](docs/conexiones.md), [protocolo UART](docs/protocolo-uart.md), [máquina de estados](docs/maquina-de-estados.md) y [plan de trabajo del equipo](docs/plan-de-trabajo-equipo.md).
 

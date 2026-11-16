@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="es" data-tema="oscuro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark light">
+  <title>Triar — Banda Clasificadora</title>
+  <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
+  <link rel="apple-touch-icon" href="img/icono-180.png">
+  <script>
+    /* Tema: ?tema=oscuro|claro lo fuerza; si no, se sigue el modo del sistema. Sin interruptor visible. */
+    (function () {
+      var q = new URLSearchParams(location.search).get("tema");
+      var raiz = document.documentElement;
+      var claro = window.matchMedia ? matchMedia("(prefers-color-scheme: light)") : null;
+      function aplicar() { raiz.dataset.tema = q === "claro" || q === "oscuro" ? q : claro && claro.matches ? "claro" : "oscuro"; }
+      aplicar();
+      if (!q && claro && claro.addEventListener) claro.addEventListener("change", aplicar);
+    })();
+  </script>
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/banda.css">
+</head>
+<body data-modo="supervision">
+  <a class="saltar" href="#contenido">Saltar al contenido</a>
+  <div id="encabezado"></div>
+  <div id="pestanas"></div>
+  <main id="contenido" tabindex="-1"></main>
+  <footer id="pie" class="pie"></footer>
+  <div id="avisos" class="avisos" role="status"></div>
+  <div id="anuncio" class="solo-lectores" role="status" aria-live="polite"></div>
+
+  <script src="js/formato.js"></script>
+  <script src="js/modo.js"></script>
+  <script src="js/modelo.js"></script>
+  <script src="js/fuente-real.js"></script>
+  <script src="js/fuente-demo.js"></script>
+  <script src="js/etapas.js"></script>
+  <script src="js/graficas.js"></script>
+  <script src="js/vistas.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

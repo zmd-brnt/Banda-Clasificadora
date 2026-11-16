@@ -1,0 +1,107 @@
+/* La banda (elemento firma), los contenedores y la rejilla de Tiempo real.
+   Las etapas se iluminan según el ESTADO del ESP32 (no es la posición real de la pieza). */
+.banda { background: var(--superficie); border: 1px solid var(--borde); border-radius: var(--radio); padding: 16px; display: grid; gap: 16px; }
+.banda-estado { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+.banda-estado strong { font-size: var(--t-22); line-height: 1.2; }
+.banda-estado[data-tono="critico"] strong { color: var(--critico); }
+.banda-estado[data-tono="aviso"] strong { color: var(--aviso); }
+.banda-estado[data-tono="lectura"] strong { color: var(--acento); }
+
+/* Cinta: franjas diagonales que avanzan solo cuando el motor está en marcha */
+.cinta-caja { position: relative; }
+.cinta {
+  position: absolute; background-color: var(--fondo); border: 1px solid var(--borde); border-radius: 10px;
+  background-image: repeating-linear-gradient(115deg, var(--borde) 0 8px, transparent 8px 16px);
+}
+.banda[data-motor="on"] .cinta { animation: avanza-h 1.2s linear infinite; }
+.etapas { position: relative; list-style: none; margin: 0; padding: 0; display: grid; }
+.etapa { display: flex; align-items: center; gap: 10px; color: var(--texto-2); font-size: var(--t-14); font-weight: 550; }
+.etapa-punto {
+  flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--superficie);
+  border: 3px solid var(--texto-3);
+}
+.etapa.activa { color: var(--texto); font-weight: 700; }
+.etapa.activa .etapa-punto { background: var(--ok); border-color: var(--ok); }
+.etapa.activa[data-tono="lectura"] .etapa-punto { background: var(--acento); border-color: var(--acento); animation: respira 1.6s ease-in-out infinite; }
+
+/* Horizontal (pantalla ancha): cinta detrás de 5 etapas en fila */
+.banda-h .cinta-caja { padding: 12px 0; }
+.banda-h .cinta { left: 0; right: 0; top: 50%; height: 14px; transform: translateY(-50%); }
+.banda-h .etapas { grid-template-columns: repeat(5, 1fr); }
+.banda-h .etapa { flex-direction: column; text-align: center; gap: 8px; }
+.banda-h .etapa-nombre { background: var(--superficie); padding: 0 6px; }
+
+/* Vertical (teléfono): cinta a la izquierda, etapas en columna */
+.banda-v .cinta-caja { padding-left: 4px; }
+.banda-v .cinta { left: 4px; top: 0; bottom: 0; width: 14px; height: auto; background-image: repeating-linear-gradient(25deg, var(--borde) 0 8px, transparent 8px 16px); }
+.banda-v[data-motor="on"] .cinta { animation: avanza-v 1.2s linear infinite; }
+.banda-v .etapas { gap: 14px; padding-left: 0; }
+.banda-v .etapa-punto { margin-left: -1px; }
+
+/* Contenedores */
+.contenedores { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.contenedor { --c: var(--cat-r); display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: var(--fondo); border: 1px solid var(--borde); border-top: 4px solid var(--c); border-radius: 10px; font-size: var(--t-14); }
+.contenedor[data-cat="A"] { --c: var(--cat-a); }
+.contenedor[data-cat="B"] { --c: var(--cat-b); }
+.cont-nombre { font-weight: 650; }
+.contenedor .cat { align-self: flex-start; }
+.cont-cifra { color: var(--texto-2); font-variant-numeric: tabular-nums; }
+.barra { display: block; position: relative; height: 8px; border-radius: 4px; background: var(--borde); overflow: hidden; }
+.barra::after { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--p); background: var(--c); transition: width 0.4s ease; }
+.contenedor.lleno { border-color: var(--aviso); border-top-color: var(--aviso); }
+.contenedor.destino { outline: 3px solid var(--c); outline-offset: 2px; animation: llega 0.6s ease-out; }
+
+/* Rejilla de Tiempo real */
+.rejilla-tr { display: grid; gap: 16px; margin-top: 16px; }
+.ultima-titulo { font-size: var(--t-22); font-weight: 650; margin: 8px 0 4px; line-height: 1.25; }
+.ticket { --c: var(--borde); padding: 0; display: grid; grid-template-columns: 10px minmax(0, 1fr); overflow: hidden; }
+.ticket::before { content: ""; background: var(--c); }
+.ticket[data-cat="A"] { --c: var(--cat-a); }
+.ticket[data-cat="B"] { --c: var(--cat-b); }
+.ticket[data-cat="R"] { --c: var(--cat-r); }
+.ticket-cuerpo { padding: 16px; min-width: 0; }
+.recientes { list-style: none; display: grid; grid-template-columns: repeat(11, minmax(0, 1fr)) minmax(0, 1.4fr); gap: 4px; margin: 14px 0 0; padding: 0; }
+.reciente { height: 30px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: var(--t-14); border-radius: 8px; }
+.reciente-ultima { box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 30%, transparent); }
+.resumen-cab { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; margin-top: 4px; }
+.resumen-cab p { margin: 0; }
+.resumen-total .cifra-valor { font-size: var(--t-34); font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.reparto { display: flex; gap: 2px; height: 22px; margin: 12px 0 10px; border-radius: 7px; overflow: hidden; background: var(--borde); }
+.tramo { display: block; }
+.tramo-A { background: var(--cat-a); } .tramo-B { background: var(--cat-b); } .tramo-R { background: var(--cat-r); }
+.leyenda-reparto { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.ley dt { font-size: var(--t-12); color: var(--texto-2); }
+.ley dd { margin: 0; font-size: var(--t-22); font-weight: 700; font-variant-numeric: tabular-nums; }
+.ley-A dd { color: var(--cat-a); } .ley-B dd { color: var(--cat-b); } .ley-R dd { color: var(--cat-r); }
+.graficas { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+.graficas svg { display: block; width: 100%; height: auto; max-height: 64px; color: var(--acento); margin: 8px 0 4px; }
+.feed { list-style: none; margin: 8px 0 0; padding: 0; }
+.evento { display: flex; gap: 12px; align-items: baseline; padding: 6px 0 6px 10px; border-left: 3px solid var(--borde); font-size: var(--t-14); }
+.evento + .evento { margin-top: 2px; }
+.evento time { color: var(--texto-3); flex: none; }
+.evento[data-tono="ok"] { border-left-color: var(--ok); }
+.evento[data-tono="aviso"] { border-left-color: var(--aviso); }
+.evento[data-tono="critico"] { border-left-color: var(--critico); }
+.evento[data-tono="lectura"] { border-left-color: var(--acento); }
+
+/* Teléfono: los contenedores A y B ya se nombran con su letra; el nombre queda solo para lectores de pantalla */
+@media (max-width: 899px) {
+  .contenedor:not([data-cat="R"]) .cont-nombre {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+  }
+  .contenedor { position: relative; }
+}
+
+@media (min-width: 900px) {
+  .banda { padding: 20px 24px; }
+  .rejilla-tr { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.1fr); grid-template-areas: "ultima resumen feed" "graficas graficas feed"; align-items: stretch; }
+  .ultima { grid-area: ultima; }
+  .resumen { grid-area: resumen; }
+  .graficas { grid-area: graficas; }
+  .feed-caja { grid-area: feed; }
+}
+
+@keyframes avanza-h { to { background-position: 32px 0; } }
+@keyframes avanza-v { to { background-position: 0 32px; } }
+@keyframes respira { 0%, 100% { box-shadow: 0 0 0 0 transparent; } 50% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--acento) 35%, transparent); } }
+@keyframes llega { from { transform: scale(0.96); } to { transform: scale(1); } }

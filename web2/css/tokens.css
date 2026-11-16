@@ -1,0 +1,55 @@
+/* Variables de diseño de Triar. Oscuro es el tema de diseño (en :root); claro está derivado.
+   Los valores salen de docs/superpowers/specs/2026-11-15-panel-nuevo-design.md §6.1 y se
+   comprueban con web2/tests/contraste.test.js. --borde y --sobre-critico son auxiliares. */
+:root {
+  color-scheme: dark;
+  --fondo: #0E1417;
+  --superficie: #172127;
+  --borde: #33444D;
+  --texto: #E8EEF0;
+  --texto-2: #9AA9B1;
+  --texto-3: #8A9AA3;
+  --acento: #38D6C8;
+  --sobre-acento: #0E1417;
+  --cat-a: #5AA9FF;
+  --cat-b: #FF7AB6;
+  --cat-r: #9AA9B1;
+  --ok: #4ADE80;
+  --aviso: #FBBF24;
+  --critico: #FF6B5E;
+  --sobre-critico: #0E1417;
+
+  --fuente: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --t-12: 0.75rem;
+  --t-14: 0.875rem;
+  --t-17: 1.0625rem;
+  --t-22: 1.375rem;
+  --t-34: 2.125rem;
+  --t-48: 3rem;
+  --radio: 14px;
+}
+
+:root[data-tema="claro"] {
+  color-scheme: light;
+  --fondo: #F2F5F6;
+  --superficie: #FFFFFF;
+  --borde: #C3CDD2;
+  --texto: #0E1417;
+  --texto-2: #4B5A62;
+  --texto-3: #5A6770;
+  --acento: #00766E;
+  --sobre-acento: #FFFFFF;
+  --cat-a: #1F67C9;
+  --cat-b: #B8185F;
+  --cat-r: #5A6770;
+  --ok: #167A32;
+  --aviso: #8F5400;
+  --critico: #C0342A;
+  --sobre-critico: #FFFFFF;
+}
+
+@media (prefers-contrast: more) {
+  :root { --borde: #6F838E; --texto-2: #C9D4D9; --texto-3: #C9D4D9; }
+  :root[data-tema="claro"] { --borde: #5A6770; --texto-2: #2B363C; --texto-3: #2B363C; }
+}

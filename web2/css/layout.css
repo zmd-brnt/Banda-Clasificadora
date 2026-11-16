@@ -1,0 +1,50 @@
+/* Armazón: encabezado, pestañas (barra inferior en teléfono, fila superior en laptop), contenido y pie.
+   Móvil primero; a partir de 900 px (modo operación) cambian la barra y las columnas. */
+.franja { padding: 10px 16px; font-size: var(--t-14); border-left: 6px solid var(--aviso); background: var(--superficie); border-bottom: 1px solid var(--borde); }
+.franja-error { border-left-color: var(--critico); }
+
+.encabezado {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px;
+  padding: 12px 16px; background: var(--superficie); border-bottom: 1px solid var(--borde);
+}
+.marca { display: flex; align-items: center; gap: 12px; color: var(--acento); min-width: 0; }
+.marca .logo-h { display: none; }
+.marca .subtitulo { color: var(--texto-2); font-size: var(--t-14); }
+.sistema { display: flex; flex-wrap: wrap; gap: 8px; }
+.paro { display: flex; align-items: center; gap: 12px; }
+.leyenda-paro { color: var(--texto-2); font-size: var(--t-12); max-width: 16rem; line-height: 1.3; }
+
+/* Pestañas: barra inferior fija en teléfono */
+.pestanas {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: flex;
+  background: var(--superficie); border-top: 1px solid var(--borde); padding-bottom: env(safe-area-inset-bottom);
+}
+.pestana {
+  flex: 1; min-height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  background: none; border: 0; color: var(--texto-2); font: 600 var(--t-12) / 1.2 var(--fuente); cursor: pointer; position: relative; padding: 6px 2px;
+}
+.pestana[aria-current="page"] { color: var(--acento); }
+.pestana[aria-current="page"]::after { content: ""; position: absolute; top: 0; left: 25%; right: 25%; height: 3px; border-radius: 0 0 3px 3px; background: var(--acento); }
+.insignia { position: absolute; top: 4px; left: 54%; min-width: 20px; padding: 0 5px; border-radius: 10px; background: var(--critico); color: var(--sobre-critico); font-size: var(--t-12); font-weight: 700; line-height: 20px; text-align: center; }
+
+main { display: block; padding: 16px 16px calc(80px + env(safe-area-inset-bottom)); max-width: 1280px; margin: 0 auto; outline: none; }
+.pie { padding: 0 16px 90px; color: var(--texto-3); font-size: var(--t-12); text-align: center; }
+.avisos { position: fixed; left: 16px; right: 16px; bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 30; display: grid; gap: 8px; pointer-events: none; }
+.aviso { pointer-events: auto; background: var(--superficie); color: var(--texto); border: 1px solid var(--borde); border-left: 6px solid var(--aviso); border-radius: 10px; padding: 12px 16px; font-size: var(--t-14); box-shadow: 0 6px 24px rgb(0 0 0 / .35); }
+
+.vista-titulo { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 16px; }
+
+@media (min-width: 900px) {
+  .marca .logo-h { display: block; }
+  .marca .logo-s { display: none; }
+  .pestanas {
+    position: static; border-top: 0; border-bottom: 1px solid var(--borde); padding: 0 16px; gap: 4px;
+    background: var(--fondo);
+  }
+  .pestana { flex: none; flex-direction: row; gap: 8px; min-height: 44px; padding: 0 16px; font-size: var(--t-14); }
+  .pestana[aria-current="page"]::after { top: auto; bottom: -1px; left: 8px; right: 8px; height: 3px; border-radius: 3px 3px 0 0; }
+  .insignia { position: static; }
+  main { padding: 24px 24px 40px; }
+  .pie { padding-bottom: 24px; }
+  .avisos { left: auto; right: 24px; bottom: 24px; max-width: 28rem; }
+}

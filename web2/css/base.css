@@ -1,0 +1,104 @@
+/* Reinicio, tipografía, foco y componentes genéricos (botones, chips, tarjetas, tablas). */
+*, *::before, *::after { box-sizing: border-box; }
+html { font-size: 100%; -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--fondo); color: var(--texto);
+  font: 400 var(--t-17) / 1.45 var(--fuente);
+}
+h1, h2, h3 { margin: 0; line-height: 1.2; font-weight: 650; }
+h2 { font-size: var(--t-22); }
+h3 { font-size: var(--t-17); }
+p { margin: 0; }
+code, .mono { font-family: var(--mono); font-size: 0.95em; }
+.secundario { color: var(--texto-2); }
+.pequeno { font-size: var(--t-14); }
+.solo-lectores {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0; padding: 0; margin: -1px;
+}
+.saltar { position: absolute; left: 8px; top: -60px; background: var(--acento); color: var(--sobre-acento); padding: 8px 12px; border-radius: 8px; z-index: 50; }
+.saltar:focus { top: 8px; }
+
+:focus-visible { outline: 3px solid var(--acento); outline-offset: 2px; border-radius: 6px; }
+
+/* Botones: 44 px en teléfono, 32 px en laptop (mínimos de la HIG: 44 / 28) */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid var(--borde);
+  background: var(--superficie); color: var(--texto); font: 600 var(--t-14) / 1 var(--fuente); cursor: pointer;
+}
+.btn:hover { border-color: var(--texto-2); }
+.btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.btn-primario { background: var(--acento); border-color: var(--acento); color: var(--sobre-acento); }
+.btn-peligro { background: var(--critico); border-color: var(--critico); color: var(--sobre-critico); }
+.btn-enlace { text-decoration: none; }
+@media (min-width: 900px) { .btn { min-height: 32px; padding: 0 12px; } }
+
+/* Chips de estado: el color acompaña a un texto y a un punto, nunca va solo */
+.chip {
+  display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px;
+  border: 1px solid var(--borde); background: var(--superficie); font-size: var(--t-14); font-weight: 550; white-space: nowrap;
+}
+.chip::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--texto-3); flex: none; }
+.chip[data-tono="ok"]::before { background: var(--ok); }
+.chip[data-tono="aviso"]::before { background: var(--aviso); border-radius: 2px; transform: rotate(45deg); }
+.chip[data-tono="critico"]::before { background: var(--critico); border-radius: 2px; }
+.chip[data-tono="lectura"]::before { background: var(--acento); }
+.chip[data-tono="aviso"], .chip[data-tono="critico"] { border-color: currentColor; }
+.chip[data-tono="aviso"] { color: var(--aviso); }
+.chip[data-tono="critico"] { color: var(--critico); }
+.chip[data-tono="aviso"] > *, .chip[data-tono="critico"] > * { color: var(--texto); }
+
+.tarjeta { background: var(--superficie); border: 1px solid var(--borde); border-radius: var(--radio); padding: 16px; }
+.etiqueta-seccion { font-size: var(--t-12); letter-spacing: 0.06em; text-transform: uppercase; color: var(--texto-2); font-weight: 600; }
+
+.tabla-caja { overflow-x: auto; }
+.tabla { width: 100%; border-collapse: collapse; font-size: var(--t-14); }
+.tabla th { text-align: left; color: var(--texto-2); font-weight: 600; font-size: var(--t-12); letter-spacing: 0.04em; text-transform: uppercase; padding: 8px 12px; border-bottom: 1px solid var(--borde); }
+.tabla td { padding: 10px 12px; border-bottom: 1px solid var(--borde); vertical-align: middle; }
+.tabla td.num, .tabla th.num { text-align: right; }
+
+.cat { display: inline-block; min-width: 28px; text-align: center; padding: 2px 8px; border-radius: 6px; border: 1px solid currentColor; font-weight: 700; font-size: var(--t-14); }
+.cat-A { color: var(--cat-a); }
+.cat-B { color: var(--cat-b); }
+.cat-R { color: var(--cat-r); }
+
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* Campos de formulario */
+.campo {
+  min-height: 44px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--borde);
+  background: var(--fondo); color: var(--texto); font: inherit; font-size: var(--t-14);
+}
+.campo::placeholder { color: var(--texto-3); }
+@media (min-width: 900px) { .campo { min-height: 32px; } }
+.campo-num { width: 6rem; }
+
+/* Inventario */
+.rejilla-inv { list-style: none; margin: 0 0 16px; padding: 0; display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.contenedor-inv { --c: var(--cat-r); border-top: 4px solid var(--c); display: grid; gap: 10px; align-content: start; }
+.contenedor-inv[data-cat="A"] { --c: var(--cat-a); }
+.contenedor-inv[data-cat="B"] { --c: var(--cat-b); }
+.contenedor-inv.lleno { border-color: var(--aviso); border-top-color: var(--aviso); }
+.cab { display: flex; align-items: center; gap: 10px; }
+.cifra-grande { font-size: var(--t-34); font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.controles, .herramientas { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+/* Historial y alertas */
+.lista-piezas, .lista-alertas { list-style: none; margin: 0; padding: 0; }
+.pieza-item { padding: 12px 0; border-bottom: 1px solid var(--borde); }
+.pieza-item:last-child, .alerta:last-child { border-bottom: 0; }
+.pieza-linea { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+.alerta { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--borde); align-items: flex-start; }
+.alerta .chip { flex: none; }
+.alerta.nueva .alerta-cuerpo > p:first-child { font-weight: 650; }
+
+.destino-cat { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+
+/* Etiquetas */
+.etiquetas > .tarjeta, .etiquetas > .franja { margin-bottom: 16px; }
+.formulario { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-top: 8px; }
+.campo-grupo { display: grid; gap: 4px; font-size: var(--t-14); color: var(--texto-2); font-weight: 600; }
+.campo-grupo .campo { color: var(--texto); font-weight: 400; min-width: 12rem; }
+.lista-uid { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.lista-uid li { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
