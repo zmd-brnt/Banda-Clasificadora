@@ -1,4 +1,4 @@
-# Plan de trabajo del equipo — qué falta y cómo dividirlo en 4 módulos
+VA# Plan de trabajo del equipo — qué falta y cómo dividirlo en 4 módulos
 
 > **Cómo leer este documento.** Cada afirmación lleva una etiqueta de origen:
 >
