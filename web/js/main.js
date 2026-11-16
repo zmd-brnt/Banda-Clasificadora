@@ -112,8 +112,7 @@ function irA(vista) {
 /* ---------------- Tema ---------------- */
 try { const t = localStorage.getItem("tema"); if (t) document.documentElement.dataset.theme = t; } catch {}
 $("#btn-tema").addEventListener("click", () => {
-  const actual = document.documentElement.dataset.theme
-    || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  const actual = document.documentElement.dataset.theme || "dark";   // el panel es oscuro por defecto
   const nuevo = actual === "dark" ? "light" : "dark";
   document.documentElement.dataset.theme = nuevo;
   try { localStorage.setItem("tema", nuevo); } catch {}
@@ -126,7 +125,9 @@ function actualizarBotones() {
     return;
   }
   const s = Simulador;
-  $("#btn-sim").textContent = !s.encendido ? "▶ Iniciar simulación" : s.pausado ? "▶ Reanudar" : "⏸ Pausar";
+  const sim = $("#btn-sim");
+  sim.dataset.modo = !s.encendido ? "iniciar" : s.pausado ? "reanudar" : "pausar";
+  sim.querySelector(".lbl").textContent = !s.encendido ? "Iniciar simulación" : s.pausado ? "Reanudar" : "Pausar";
   $("#btn-emergencia").disabled = !s.encendido || s.detenido;
   $("#btn-restablecer").disabled = !s.detenido;
   $("#btn-falla").disabled = !s.encendido || s.detenido;

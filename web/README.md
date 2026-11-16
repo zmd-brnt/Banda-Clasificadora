@@ -40,7 +40,7 @@ Después presiona **▶ Iniciar simulación**.
 
 | Pestaña | Para qué sirve | Qué muestra |
 |---|---|---|
-| **Tiempo real** | Ver lo que está pasando *ahora* en la banda | Indicadores (total, A, B, rechazo, tiempo de ciclo), animación de la banda con sensores, lector, compuerta y contenedores, estado de la máquina de estados, barra de distribución y **feed de eventos en vivo** |
+| **Tiempo real** | Ver lo que está pasando *ahora* en la banda | Resumen (total, A, B, rechazo, tiempo de ciclo), estado de la máquina de estados como línea de pasos con la lectura actual, y **feed de eventos en vivo** |
 | **Inventario** | Ver el acumulado por categoría y por objeto | Tarjeta por contenedor (total, ocupación vs. capacidad, *Marcar vaciado*) y tabla por UID con nombre, categoría, cantidad y última lectura, con filtro y búsqueda |
 | **Etiquetas** | Administrar la **tabla maestra** | Formulario para registrar UID → nombre → categoría, lista de UID detectados sin registrar (registro en un clic), tabla de etiquetas y botón **Sincronizar con ESP32** con aviso de versión desactualizada |
 | **Historial** | Consultar cada pieza procesada | Tabla por número de secuencia: hora, UID, objeto, destino, motivo de rechazo, tiempo de ciclo y si llegó en vivo o por reenvío. **Exportar CSV** (útil para las evidencias de las 50 pruebas) |
@@ -64,9 +64,9 @@ La barra superior controla un ESP32 virtual que sigue el flujo del documento de 
 
 | Control | Qué hace |
 |---|---|
-| ▶ Iniciar / ⏸ Pausar | Enciende el ESP32 virtual; la pausa ocurre al terminar la pieza en curso |
-| ⏹ Paro de emergencia | Detiene motor, compuerta al centro, estado `EMERGENCIA` |
-| ↺ Restablecer | Equivale al botón físico de reinicio tras error o paro |
+| ▶ Iniciar / Reanudar / ⏸ Pausar | Enciende el ESP32 virtual; la pausa ocurre al terminar la pieza en curso |
+| ⏹ Detener (paro de emergencia) | Detiene motor, compuerta al centro, estado `EMERGENCIA` |
+| Restablecer | Equivale al botón físico de reinicio tras error o paro |
 | Velocidad | 0.5× a 4× (para no esperar en las demostraciones) |
 | Limpiar datos | Borra conteos, historial y alertas |
 
@@ -95,10 +95,10 @@ Esto refleja la arquitectura: el ESP32 clasifica con **su copia local** de la ta
 ```
 web/
 ├── index.html          # Estructura de las 5 vistas
-├── css/estilos.css     # Estilos, tema claro/oscuro, responsivo
+├── css/estilos.css     # Estilos: barra lateral, tema oscuro Medianoche (claro con el botón ◐), responsivo
 └── js/
     ├── estado.js       # Modelo de datos del panel (lo que guardará la Raspberry Pi)
-    ├── ui.js           # Dibuja el panel a partir del modelo; animación de la banda
+    ├── ui.js           # Dibuja el panel a partir del modelo
     ├── simulador.js    # ESP32 virtual (solo se usa en modo simulación)
     └── main.js         # Conecta botones, pestañas y la fuente de datos
 ```
@@ -129,7 +129,7 @@ UART están en [docs/protocolo-uart.md](../docs/protocolo-uart.md).
 
 Estados de la máquina ([docs/maquina-de-estados.md](../docs/maquina-de-estados.md)): `PAUSA`, `ESPERA`,
 `LECTURA_NFC`, `CLASIFICANDO`, `LIBERA_INSPECCION`, `CONFIRMA_SALIDA`, `RETORNO`, `PAUSA_CONTENEDOR`, `ERROR`,
-`EMERGENCIA`. El simulador usa además `TRANSPORTE` (la pieza viaja hacia el sensor) para la animación.
+`EMERGENCIA`. El simulador usa además `TRANSPORTE` (la pieza viaja hacia el sensor).
 
 Ejemplo de pieza (en modo UART el panel usa además `epoca`, ver `docs/protocolo-uart.md` §5):
 
@@ -203,6 +203,5 @@ configurable por contenedor.
 
 ### Limitaciones conocidas
 
-- En modo UART la animación de la banda sigue el **estado** del ESP32, no la posición real de la pieza.
 - Para piezas que llegan tarde (tras una desconexión) la hora es la de recepción en la Pi, no la de clasificación.
 - En simulación, la inyección "Contenedor A lleno" modifica directamente el contador del panel y del ESP32 virtual (atajo de simulación); la pausa se aplica al terminar la pieza en curso.

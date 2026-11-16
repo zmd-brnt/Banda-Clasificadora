@@ -29,43 +29,23 @@ function pillCategoria(cat) {
   return `<span class="pill"><span class="muestra cat-${cat}"></span>${esc(CATEGORIAS[cat].nombre)}</span>`;
 }
 
-/* ---------------- Banda animada (solo en simulación) ---------------- */
+/* ---------------- Lectura actual ----------------
+   La vista animada de la banda se quitó del panel. El simulador sigue llamando a estos
+   métodos; solo "nuevaPieza", "lectura" y "reiniciar" tienen efecto (texto de la lectura actual). */
 const UIBanda = {
-  TOP: { centro: 72, A: 22, R: 72, B: 120 },
-
-  nuevaPieza() {
-    const p = $("#pieza");
-    p.className = "pieza";
-    p.style.transitionDuration = "0ms";
-    p.style.left = "2%";
-    p.style.top = this.TOP.centro + "px";
-    p.style.opacity = 1;
-    p.hidden = false;
-    void p.offsetWidth; // fuerza reflow para que la siguiente transición se anime
-    $("#lectura-actual").textContent = "Pieza en camino al lector…";
-  },
-  moverPieza(leftPct, destino, ms) {
-    const p = $("#pieza");
-    p.style.transitionDuration = ms + "ms";
-    p.style.left = leftPct + "%";
-    p.style.top = this.TOP[destino] + "px";
-  },
-  ocultarPieza() { $("#pieza").hidden = true; },
-  motor(on) { $("#banda").classList.toggle("moviendo", on); },
-  sensor(id, on) { $("#" + id).classList.toggle("activo", on); },
-  compuerta(dir) { $("#compuerta").className = "compuerta " + dir; },
+  nuevaPieza() { $("#lectura-actual").textContent = "Pieza en camino al lector…"; },
+  moverPieza() {},
+  ocultarPieza() {},
+  motor() {},
+  sensor() {},
+  compuerta() {},
   lectura(uid, cat, motivo) {
-    $("#pieza").classList.add("cat-" + cat);
     const e = uid && Panel.etiquetas.get(uid);
     $("#lectura-actual").innerHTML = uid
       ? `UID <code>${esc(uid)}</code> ${e ? "· " + esc(e.nombre) : ""} → <b>${esc(CATEGORIAS[cat].nombre)}</b>${motivo ? " (" + esc(MOTIVOS[motivo]) + ")" : ""}`
       : `Sin etiqueta tras 1.5 s → <b>Rechazo</b>`;
   },
-  reiniciar() {
-    this.ocultarPieza(); this.motor(false); this.compuerta("centro");
-    ["sen-ir1", "sen-nfc", "sen-ir2"].forEach(id => this.sensor(id, false));
-    $("#lectura-actual").textContent = "Esperando pieza…";
-  },
+  reiniciar() { $("#lectura-actual").textContent = "Esperando pieza…"; },
 };
 
 /* ---------------- Render ---------------- */
@@ -114,12 +94,6 @@ const UI = {
     $("#kpi-ciclo").textContent = ciclo ? (ciclo / 1000).toFixed(2) + " s" : "—";
     $("#kpi-ritmo").textContent = `${Panel.ritmoPorMinuto()} piezas en el último minuto`;
     $("#nota-seq").textContent = `último seq ${Panel.ultimoSeq || "—"}`;
-
-    // Barra apilada de distribución
-    $("#barra-dist").innerHTML = ["A", "B", "R"].map(k =>
-      `<div class="cat-${k}" style="flex-grow:${c[k]}" title="${CATEGORIAS[k].nombre}: ${c[k]} (${pct(c[k], total)} %)">${c[k] && pct(c[k], total) >= 8 ? c[k] : ""}</div>`
-    ).join("");
-    ["A", "B", "R"].forEach(k => ($("#cont-" + k).textContent = Panel.contenedores[k].contenido));
   },
 
   estado() {
@@ -127,16 +101,12 @@ const UI = {
     const etq = $("#etq-estado");
     etq.textContent = ESTADO_TXT[e] || e;
     etq.className = "etq-estado" + (e === "ERROR" || e === "EMERGENCIA" ? " error" : e.startsWith("PAUSA") ? " pausa" : "");
-    document.querySelectorAll("#pipeline li").forEach(li => li.classList.toggle("activo", li.dataset.estado.split(" ").includes(e)));
-
-    // Con datos reales no se conoce la posición exacta de la pieza: solo se refleja el estado
-    if (Panel.fuente === "uart") {
-      UIBanda.motor(["ESPERA", "LIBERA_INSPECCION", "CONFIRMA_SALIDA", "RETORNO"].includes(e));
-      UIBanda.sensor("sen-ir1", e === "LECTURA_NFC" || e === "LIBERA_INSPECCION");
-      UIBanda.sensor("sen-nfc", e === "LECTURA_NFC");
-      UIBanda.sensor("sen-ir2", e === "CONFIRMA_SALIDA");
-      if (e === "ESPERA" || e === "RETORNO") UIBanda.compuerta("centro");
-    }
+    const pasos = [...document.querySelectorAll("#pipeline li")];
+    const actual = pasos.findIndex(li => li.dataset.estado.split(" ").includes(e));
+    pasos.forEach((li, i) => {
+      li.classList.toggle("activo", i === actual);
+      li.classList.toggle("hecho", actual > -1 && i < actual);
+    });
 
     const chip = $("#chip-maquina");
     chip.className = "chip " + ({ ERROR: "critico", EMERGENCIA: "critico", PAUSA: "advertencia", PAUSA_CONTENEDOR: "advertencia", INACTIVO: "" }[e] ?? "ok");
@@ -211,7 +181,6 @@ const UI = {
         ${k === "R" ? `<p class="nota" style="margin-top:8px">${Panel.conteos.SIN_LECTURA} sin leer · ${Panel.conteos.NO_REGISTRADA} no registradas</p>` : ""}
       </article>`;
     }).join("");
-    ["A", "B", "R"].forEach(k => ($("#cont-" + k).textContent = Panel.contenedores[k].contenido));
   },
 
   inventario() {
