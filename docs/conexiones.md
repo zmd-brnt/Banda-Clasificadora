@@ -37,8 +37,8 @@ Guía para alambrar el prototipo y probarlo módulo por módulo.
           │          │       └──────────────────────────────┐  (punto común de tierra)
   RAMA LÓGICA    RAMA POTENCIA                              │
           │          │                                      │
-          │          ├── C 1000 µF / 16 V ──┐  (cerca del servo)
-          │          ├── Servo SG90 (+)     │               │
+          │          ├── C 1000 µF / 16 V ──┐  (cerca de los servos)
+          │          ├── Servo 1 + Servo 2 (+)              │
           │          └── TB6612 VM          │               │
           │                                 └────── GND ────┤
           ▼                                                 │
@@ -59,7 +59,7 @@ La **rama lógica de 5 V** (la que entra por `VIN`) también alimenta el `VCC` d
 1. **Tierra común:** ESP32, fuente de 5 V, TB6612, servo, sensores, OLED, RC522 y Raspberry Pi comparten GND. Sin tierra común, la UART y el PWM del servo no funcionan.
 2. **Servo y motor NUNCA desde el pin 3V3 del ESP32.** Van a la rama de potencia de 5 V.
 3. **Los dos ramales salen de la bornera de la fuente**, no uno "colgado" del otro. Así la caída de voltaje que provoca el servo al arrancar no llega directo al ESP32 (problema 2 del documento de avance).
-4. **Capacitor de 1000 µF (mínimo 470 µF), 16 V o más,** entre +5V y GND de la rama de potencia, lo más cerca posible del servo. **Respeta la polaridad**: la franja del electrolítico es el negativo.
+4. **Capacitor de 1000 µF (mínimo 470 µF), 16 V o más,** entre +5V y GND de la rama de potencia, lo más cerca posible de los dos servos. **Respeta la polaridad**: la franja del electrolítico es el negativo.
 5. **Capacitor cerámico de 100 nF** soldado entre las dos terminales del motor TT, para reducir el ruido eléctrico de las escobillas.
 6. **RC522 y OLED a 3.3 V; HC-SR04 a 5 V.** El RC522 se daña con 5 V. Los dos HC-SR04 se alimentan de la **rama lógica de 5 V** (no de 3V3) y su pin `Echo` entrega **5 V**, que **no debe llegar directo al ESP32** (sus GPIO son de 3.3 V): cada `Echo` pasa por un **divisor de voltaje** (§5.3). `Trig` es una salida de 3.3 V del ESP32; el HC-SR04 típico la reconoce, pero se comprueba en la prueba.
 
@@ -77,10 +77,10 @@ La **rama lógica de 5 V** (la que entra por `VIN`) también alimenta el `VCC` d
 | OLED 0.96" | 10–20 mA | 3.3 V |
 | 2× HC-SR04 | ~15 mA c/u (típico) | **5 V lógica** |
 | LEDs (3) | ~5 mA c/u | 3.3 V |
-| Servo SG90 | 100–250 mA moviéndose, **picos de ~650 mA** | Potencia |
+| 2× Servo SG90 (se mueven a la vez) | 100–250 mA c/u moviéndose, **picos de ~650 mA c/u (~1.3 A juntos)** | Potencia |
 | Motor TT a 5 V | 150–250 mA, **arranque/bloqueo ~1 A** | Potencia |
 
-Total en el peor caso: ~2 A → la fuente de **3 A** da margen. Son valores típicos de hojas de datos, no medidos.
+Total en el peor caso: ~2.7 A → con una fuente de **3 A** el margen es **justo**; con una de 2 A **no alcanza** (usar la de 3 A o más). Son valores típicos de hojas de datos, no medidos.
 
 ---
 
@@ -97,7 +97,8 @@ Total en el peor caso: ~2 A → la fuente de **3 A** da margen. Son valores típ
 | **22** | Salida | OLED SCL | I2C por defecto de Arduino-ESP32 |
 | **34** | Entrada | HC-SR04 inspección **Echo** (vía divisor) | Solo entrada, sin pull-up interno. **Nunca 5 V directo** |
 | **35** | Entrada | HC-SR04 salida **Echo** (vía divisor) | Solo entrada, sin pull-up interno. **Nunca 5 V directo** |
-| **13** | Salida PWM | Servo señal | Ya usado en `servo_test` |
+| **13** | Salida PWM | Servo 1 (lateral **izquierdo**) señal | Ya usado en `servo_test` |
+| **12** | Salida PWM | Servo 2 (lateral **derecho**) señal | **Nuevo.** Pin de arranque: si está en ALTO al encender, el ESP32 no arranca. La entrada del SG90 no lo sube, pero **comprobarlo** (§5.4) |
 | **26** | Salida PWM | TB6612 PWMA | Velocidad de la banda |
 | **14** | Salida | HC-SR04 inspección **Trig** | Antes AIN1. Emite un pulso al arrancar: solo provoca una medición espuria que el firmware debe ignorar |
 | **27** | Salida | HC-SR04 salida **Trig** | Antes AIN2 |
@@ -114,10 +115,10 @@ Total en el peor caso: ~2 A → la fuente de **3 A** da margen. Son valores típ
 **Pines que NO deben usarse:**
 - **GPIO 6–11:** conectados a la memoria flash interna.
 - **GPIO 1 y 3:** son el puerto USB-serial (Monitor Serial y programación).
-- **GPIO 12:** si está en ALTO al encender, el ESP32 no arranca.
+- **GPIO 12:** solo para la señal del servo 2 (no le pongas pull-up ni nada que lo suba al encender; si estuviera en ALTO al arrancar, el ESP32 no inicia).
 - **GPIO 0:** botón BOOT.
 
-Libres de reserva: ninguno cómodo. GPIO14 y GPIO27 ya no están disponibles: ahora son `Trig`. **Consecuencia:** AIN1 y AIN2 del TB6612 van fijos por cableado (§5.5) y la banda **no tiene reversa**. Cualquier función nueva que necesite un pin de salida exige otra decisión.
+Libres de reserva: ninguno cómodo. GPIO14 y GPIO27 ya no están disponibles: ahora son `Trig`. **Consecuencia:** AIN1 y AIN2 del TB6612 van fijos por cableado (§5.5) y la banda **no tiene reversa**. GPIO12 se ocupó para el segundo servo. Cualquier función nueva que necesite un pin de salida exige otra decisión.
 
 ---
 
@@ -201,16 +202,33 @@ HC-SR04 Echo ──[1 kΩ]──┬────► GPIO34 (o GPIO35)
 - Las piezas pequeñas, blandas o inclinadas pueden no devolver eco: prueba con las piezas reales.
 - El pulso de GPIO14 al arrancar (§3) puede disparar una medición falsa; el firmware debe descartar las primeras mediciones.
 
-### 5.4 Servomotor SG90
+### 5.4 Compuerta doble: dos servos SG90
 
-| Cable del servo | Conectar a |
-|---|---|
-| Café / negro (GND) | GND común |
-| Rojo (V+) | **+5 V rama de potencia** (no al ESP32) |
-| Naranja / amarillo (señal) | GPIO13 |
+Dos servos, uno en cada lateral de la banda, cada uno con un brazo (paleta).
 
-- Posiciones (de `servo_test`): 0° = Categoría A, 90° = centro/rechazo, 180° = Categoría B. Ajustar los ángulos reales cuando la compuerta esté montada.
-- La señal de 3.3 V del ESP32 suele funcionar con el SG90. Si el servo tiembla o no responde, revisar primero la alimentación y la tierra común.
+| Cable | Servo 1 (lateral izquierdo) | Servo 2 (lateral derecho) |
+|---|---|---|
+| Café / negro (GND) | GND común | GND común |
+| Rojo (V+) | **+5 V rama de potencia** | **+5 V rama de potencia** |
+| Naranja / amarillo (señal) | **GPIO13** | **GPIO12** |
+
+**Funcionamiento** (vista desde arriba, la banda avanza hacia abajo):
+
+```
+   CENTRO (rechazo)      IZQUIERDA (cat. A)     DERECHA (cat. B)
+   |  S1      S2  |      |  S1      S2  |       |  S1      S2  |
+   |  |        |  |      |   /       /  |       |  \       \   |
+   |  |        |  |      |  /       /   |       |   \       \  |
+   v  pasa de frente     <- sale a la izq.      sale a la der. ->
+```
+
+- **Centro:** los dos brazos quedan paralelos a la banda; la pieza sin categoría (o no registrada) **pasa de frente** al contenedor de rechazo.
+- **Categoría A → izquierda; categoría B → derecha.**
+- Los dos servos reciben **el mismo giro, al mismo tiempo y en el mismo sentido**: los brazos quedan paralelos entre sí y **no pueden chocar**. El brazo del lado contrario al desvío empuja; el otro se abre hacia fuera.
+- **Montaje:** los dos servos con el eje **hacia el mismo lado** (por ejemplo, ambos hacia arriba). Si uno se monta al revés, girarían en sentidos opuestos y chocarían; se corrige con `INVERTIR_S1/S2` en `servo_test`.
+- Los ángulos (`CENTRO_S1`, `CENTRO_S2`, `DESVIO_GRADOS`, por defecto 90° y ±45°) son **provisionales**: se calibran con los brazos montados siguiendo el encabezado de `pruebas/servo_test/servo_test.ino`.
+- **Comprobación de GPIO12:** con el servo 2 conectado, presiona EN/RST; el ESP32 debe arrancar normalmente. Si no arranca, conecta la señal del servo 2 también a GPIO13 (en paralelo con el servo 1): se mueven igual, pero ya no se calibran por separado.
+- La señal de 3.3 V del ESP32 suele funcionar con el SG90. Si un servo tiembla o el ESP32 se reinicia al moverlos juntos, revisar primero la fuente (§2.4), el capacitor y la tierra común.
 
 ### 5.5 Driver TB6612FNG + motor TT
 
@@ -276,11 +294,11 @@ GPIO25 ─────o  o───────┬──────────
 ```
 
 - **En operación** (botón sin presionar, contacto cerrado): el programa pone GPIO25 en ALTO → STBY = ALTO → el motor puede moverse. GPIO39 lee ALTO.
-- **Al presionar el paro** (contacto abierto): la resistencia de 10 kΩ lleva STBY a BAJO → **el driver apaga el motor por hardware**, aunque el programa esté trabado. GPIO39 lee BAJO → interrupción en el código → servo al centro, LED rojo y buzzer.
+- **Al presionar el paro** (contacto abierto): la resistencia de 10 kΩ lleva STBY a BAJO → **el driver apaga el motor por hardware**, aunque el programa esté trabado. GPIO39 lee BAJO → interrupción en el código → servos al centro, LED rojo y buzzer.
 - **Si se corta un cable del botón**, el efecto es el mismo que presionarlo (diseño a prueba de fallas).
 - **Al encender el ESP32**, GPIO25 está en BAJO hasta que el programa lo activa → el motor no arranca solo.
 - En el código, el paro se detecta cuando **GPIO25 = ALTO y GPIO39 = BAJO**.
-- **Limitación:** el servo **no** se corta por hardware; se lleva al centro por software. Con un SG90 el riesgo es bajo, pero hay que mencionarlo en el reporte. Para cortar también el servo haría falta un botón de dos contactos o un relé.
+- **Limitación:** los servos **no** se cortan por hardware; se llevan al centro por software. Con un SG90 el riesgo es bajo, pero hay que mencionarlo en el reporte. Para cortar también el servo haría falta un botón de dos contactos o un relé.
 
 > Esto es una **recomendación de este documento**: el avance solo especifica "botón con interrupción". Conviene confirmarlo con el profesor o con el equipo.
 
@@ -329,7 +347,7 @@ Conecta y prueba **un módulo a la vez**. No pases al siguiente hasta que el ant
 |---|---|---|---|---|
 | 0 | Fuente y tierras | Multímetro **sin módulos conectados** | 4.9–5.2 V en ambas ramas; continuidad entre todas las GND; **sin** continuidad entre +5V y GND | — |
 | 1 | ESP32 solo | Cargar un *blink* | Carga sin errores; el LED de la placa parpadea | Ejemplo *Blink* del IDE |
-| 2 | Servo | `servo_test` | 3 posiciones repetibles; el ESP32 no se reinicia | `pruebas/servo_test` |
+| 2 | 2× Servo (compuerta) | `servo_test` | Centro/izquierda/derecha repetibles; los dos brazos giran a la vez sin tocarse; el ESP32 arranca con GPIO12 conectado y no se reinicia | `pruebas/servo_test` (actualizada a 2 servos, sin probar en hardware) |
 | 3 | RC522 | `nfc_test` (**actualizado a RST = GPIO4**) | Firmware `0x91`/`0x92`; mismo UID en cada lectura; UID de 7 bytes con las NTAG213 | `pruebas/nfc_test` |
 | 4 | OLED | Escáner I2C, luego un texto | Aparece la dirección `0x3C`/`0x3D`; se ve el texto | `pruebas/oled_test` (sin probar en hardware) |
 | 5 | HC-SR04 × 2 | **Antes de conectar:** alimentar a 5 V y medir con multímetro el voltaje de `Echo` y de la salida del divisor. Luego leer la distancia por el Monitor Serial | `Echo` llega al ESP32 a ≤3.3 V; distancia con banda libre estable; cambia claramente al pasar la pieza real; un sensor no capta al otro; distancia mínima medida y compatible con la geometría | `pruebas/ultrasonico_test` (sin probar en hardware; el encabezado del .ino explica la medición del divisor) |
@@ -348,11 +366,14 @@ El paso 10 es el que valida el problema de caída de voltaje del avance. Si fall
 | Prueba | Cambio | Motivo |
 |---|---|---|
 | `pruebas/nfc_test/nfc_test.ino` | `RST_PIN` 22 → **4** | GPIO22 es el SCL por defecto del I2C, necesario para la OLED |
-| `servo_test`, `uart_test` | Sin cambios | — |
+| `pruebas/servo_test/servo_test.ino` | **Dos servos** (GPIO13 y GPIO12), movimiento simultáneo en el mismo sentido | Compuerta lateral doble: A izquierda, B derecha, rechazo de frente |
+| `pruebas/motor_test/motor_test.ino` | Sin botón de paro: GPIO25 directo a STBY; arranca solo al 100 % | Diagnóstico del motor que no giraba |
+| `uart_test` | Sin cambios | — |
+| `firmware/banda_clasificadora` | Compuerta doble (GPIO13 y GPIO12), misma lógica que `servo_test`; ángulos en `config.h` | Compuerta lateral doble |
 | `pruebas/ir_test/ir_test.ino` | **Obsoleto** | Los IR se sustituyen por HC-SR04 |
 | `pruebas/ultrasonico_test` | **Nueva** (escrita, compila, sin probar en hardware) | Medir distancia, calibrar umbral (modo `c`), interferencia entre sensores (modo `x`) |
 | `pruebas/oled_test`, `motor_test`, `paro_test`, `indicadores_test` | **Nuevas** (escritas, compilan, sin probar en hardware) | Pasos 4, 6, 7 y 8 de §7 |
-| `esp32_integracion_test.ino` | Sin cambios | No usa sensores ni motor. El sistema completo está en `firmware/banda_clasificadora` |
+| `esp32_integracion_test.ino` | **Dos servos** (GPIO13 y GPIO12), misma lógica que `servo_test` | No usa sensores ni motor. El sistema completo está en `firmware/banda_clasificadora` |
 
 ---
 
@@ -366,7 +387,8 @@ Llenar conforme se prueba. Una conexión no se marca como verificada sin evidenc
 | --------------------- | --------- | ------- | ----- | ----------------- |
 | Fuente y tierras      | ☐         | ☐       |       |                   |
 | ESP32                 | ☐         | ☐       |       |                   |
-| Servo SG90            | ☐         | ☐       |       |                   |
+| Servo 1 (izq., GPIO13) | ☐         | ☐       |       |                   |
+| Servo 2 (der., GPIO12) | ☐         | ☐       |       |                   |
 | RC522                 | ☐         | ☐       |       |                   |
 | OLED                  | ☐         | ☐       |       |                   |
 | HC-SR04 inspección    | ☐         | ☐       |       |                   |

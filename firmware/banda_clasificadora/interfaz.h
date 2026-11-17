@@ -4,7 +4,7 @@
 // contacto NC del boton. Al presionar el paro, el contacto se abre, la resistencia de
 // 10 kΩ lleva STBY a BAJO y el driver apaga el motor POR HARDWARE, aunque el programa este
 // trabado. GPIO39 lee ese nodo: BAJO con GPIO25 en ALTO = paro presionado (o cable cortado).
-// El servo NO se corta por hardware: el programa lo lleva al centro.
+// Los servos NO se cortan por hardware: el programa los lleva al centro.
 
 #pragma once
 #include <Adafruit_SSD1306.h>

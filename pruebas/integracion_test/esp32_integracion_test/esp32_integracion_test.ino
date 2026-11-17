@@ -1,4 +1,4 @@
-// Prueba de integracion: NFC RC522 + Servo SG90 + UART con Raspberry Pi
+// Prueba de integracion: NFC RC522 + compuerta doble (2 servos SG90) + UART con Raspberry Pi
 //
 // Objetivo:
 //   Reproducir el ciclo de clasificacion del proyecto usando SOLO el lector NFC, el servo y el
@@ -14,7 +14,8 @@
 //   1. ESPERA          Se espera una pieza nueva en el lector.
 //   2. LECTURA_NFC     "Banda detenida". El RC522 intenta leer el UID durante 1.5 s como maximo.
 //   3.                 Se consulta la tabla local (sincronizada desde la Raspberry Pi).
-//   4. CLASIFICANDO    El servo mueve la compuerta: A (0°), B (180°) o rechazo (90°).
+//   4. CLASIFICANDO    Los dos servos giran juntos: A -> izquierda, B -> derecha, rechazo -> centro
+//                      (la pieza pasa de frente).
 //   5. LIBERA_LECTOR   "Banda en marcha". La pieza debe retirarse del lector; mientras siga ahi
 //                      no se vuelve a leer (doble lectura). Si no se retira en 10 s -> ATASCO.
 //   6. CONFIRMA_SALIDA Transito simulado hasta el IR de salida (TRANSITO_MS).
@@ -25,7 +26,8 @@
 //
 // Conexiones (ver docs/conexiones.md):
 //   RC522:  SDA->GPIO5  SCK->GPIO18  MOSI->GPIO23  MISO->GPIO19  RST->GPIO4  3.3V->3V3  GND->GND
-//   Servo:  senal->GPIO13  rojo->+5V rama de potencia (NO del ESP32)  cafe->GND comun
+//   Servo 1 (lateral izq.): senal->GPIO13   Servo 2 (lateral der.): senal->GPIO12
+//           rojo de ambos->+5V rama de potencia (NO del ESP32)  cafe->GND comun
 //   UART:   GPIO17 (TX2)->RPi pin 10 (RXD)   GPIO16 (RX2)<-RPi pin 8 (TXD)   GND<->RPi pin 6
 //
 // Bibliotecas: MFRC522 (GithubCommunity / miguelbalboa). Preferences viene con el core ESP32.
@@ -59,19 +61,27 @@
 // ---- Pines ----
 #define SS_PIN     5
 #define RST_PIN    4
-#define SERVO_PIN  13
+#define SERVO1_PIN 13   // lateral izquierdo
+#define SERVO2_PIN 12   // lateral derecho (pin de arranque: comprobar que el ESP32 arranca)
 #define UART2_TX   17
 #define UART2_RX   16
 
 #define BAUD_RATE  115200
 
-// ---- Servo (mismos valores que servo_test) ----
+// ---- Compuerta doble (copiar la calibracion de servo_test) ----
+// Los dos servos giran el MISMO desplazamiento, a la vez y en el mismo sentido: no chocan.
 #define PWM_FREQ     50
 #define PWM_RESOL    16
-#define PWM_CHANNEL  0
-#define DUTY_0    1638    // Categoria A (izquierda)
-#define DUTY_90   4915    // Centro / rechazo
-#define DUTY_180  7864    // Categoria B (derecha)
+#define PWM_CHANNEL1 0    // solo core 2.x
+#define PWM_CHANNEL2 1
+#define PULSO_MIN_US 500  // ~0°
+#define PULSO_MAX_US 2400 // ~180°
+const int  CENTRO_S1     = 90;     // [PROVISIONAL] brazo 1 paralelo a la banda
+const int  CENTRO_S2     = 90;     // [PROVISIONAL] brazo 2 paralelo a la banda
+const int  DESVIO_GRADOS = 45;     // [PROVISIONAL]
+const int  SENTIDO_IZQ   = +1;     // +1 o -1
+const bool INVERTIR_S1   = false;
+const bool INVERTIR_S2   = false;
 
 // ---- Tiempos (ms) ----
 #define SONDEO_NFC_MS        50   // cada cuanto se busca una pieza nueva en ESPERA
@@ -160,22 +170,29 @@ bool verLatidos = false;
 // Servo
 // =====================================================================
 
-void moverServo(uint32_t duty) {
+uint32_t anguloADuty(int ang) {
+  ang = constrain(ang, 0, 180);
+  uint32_t us = PULSO_MIN_US + (uint32_t)(PULSO_MAX_US - PULSO_MIN_US) * ang / 180;
+  return us * 65535UL / 20000UL;
+}
+
+void escribirServo(int pin, int canal, int ang) {
 #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
-  ledcWrite(SERVO_PIN, duty);
+  (void)canal;
+  ledcWrite(pin, anguloADuty(ang));
 #else
-  ledcWrite(PWM_CHANNEL, duty);
+  (void)pin;
+  ledcWrite(canal, anguloADuty(ang));
 #endif
 }
 
+// A -> izquierda, B -> derecha, cualquier otro -> centro (la pieza pasa de frente).
 void posicionarCompuerta(char categoria) {
-  if (categoria == 'A') {
-    moverServo(DUTY_0);
-  } else if (categoria == 'B') {
-    moverServo(DUTY_180);
-  } else {
-    moverServo(DUTY_90);
-  }
+  int d = 0;
+  if (categoria == 'A') d = SENTIDO_IZQ * DESVIO_GRADOS;
+  else if (categoria == 'B') d = -SENTIDO_IZQ * DESVIO_GRADOS;
+  escribirServo(SERVO1_PIN, PWM_CHANNEL1, CENTRO_S1 + (INVERTIR_S1 ? -d : d));
+  escribirServo(SERVO2_PIN, PWM_CHANNEL2, CENTRO_S2 + (INVERTIR_S2 ? -d : d));
 }
 
 // =====================================================================
@@ -558,7 +575,7 @@ void entrarError(const char* codigo, const char* explicacion) {
   Serial.print(": ");
   Serial.println(explicacion);
   Serial.println("!! Banda detenida y compuerta al centro. Retira la pieza y envia 'r' para restablecer.");
-  moverServo(DUTY_90);
+  posicionarCompuerta('R');
   enviarAlerta(codigo);
   cambiarEstado(ERROR);
 }
@@ -675,7 +692,7 @@ void cicloClasificacion() {
     case RETORNO:
       vigilarPiezasJuntas();
       if (millis() - tEstado >= RETORNO_CENTRO_MS) {
-        moverServo(DUTY_90);
+        posicionarCompuerta('R');
         Serial.println("  Compuerta al centro. Listo para la siguiente pieza.");
         avisoJuntas = false;
         cambiarEstado(ESPERA);
@@ -730,7 +747,7 @@ void atenderMonitor() {
       break;
     case 'e':
       if (estado == EMERGENCIA) break;
-      moverServo(DUTY_90);
+      posicionarCompuerta('R');
       Serial.println();
       Serial.println("!! PARO DE EMERGENCIA: banda detenida y compuerta al centro. La pieza en curso no se registra.");
       Serial.println("!! Retira la pieza y envia 'r' para restablecer.");
@@ -760,16 +777,19 @@ void setup() {
   Serial2.begin(BAUD_RATE, SERIAL_8N1, UART2_RX, UART2_TX);
 
 #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
-  ledcAttach(SERVO_PIN, PWM_FREQ, PWM_RESOL);
+  ledcAttach(SERVO1_PIN, PWM_FREQ, PWM_RESOL);
+  ledcAttach(SERVO2_PIN, PWM_FREQ, PWM_RESOL);
 #else
-  ledcSetup(PWM_CHANNEL, PWM_FREQ, PWM_RESOL);
-  ledcAttachPin(SERVO_PIN, PWM_CHANNEL);
+  ledcSetup(PWM_CHANNEL1, PWM_FREQ, PWM_RESOL);
+  ledcSetup(PWM_CHANNEL2, PWM_FREQ, PWM_RESOL);
+  ledcAttachPin(SERVO1_PIN, PWM_CHANNEL1);
+  ledcAttachPin(SERVO2_PIN, PWM_CHANNEL2);
 #endif
-  moverServo(DUTY_90);
+  posicionarCompuerta('R');
 
   delay(200);
   Serial.println();
-  Serial.println("=== Prueba de integracion: NFC + Servo + UART ===");
+  Serial.println("=== Prueba de integracion: NFC + 2 servos + UART ===");
 
   // Secuencia, conteo y tabla guardados en memoria no volatil (sobreviven a reinicios)
   prefs.begin("integracion", false);

@@ -26,8 +26,9 @@
 #define PIN_TRIG_SALIDA  27
 #define PIN_ECHO_SALIDA  35
 
-// Servo SG90
-#define PIN_SERVO        13
+// Compuerta doble: dos servos SG90, uno en cada lateral de la banda (docs/conexiones.md §5.4)
+#define PIN_SERVO1       13     // lateral izquierdo
+#define PIN_SERVO2       12     // lateral derecho (pin de arranque: no debe estar en ALTO al encender)
 
 // TB6612FNG: AIN1 = 3.3 V y AIN2 = GND fijos por cableado (solo avanza)
 #define PIN_MOTOR_PWMA   26
@@ -51,13 +52,21 @@
 #define UART_BAUD        115200
 
 // ---------------------------------------------------------------- Servo
-// Mismos valores que pruebas/servo_test (50 Hz, 16 bits). Ajustar con la compuerta montada.
+// Mismos valores que pruebas/servo_test. Calibrar ahi y copiar aqui.
+// Los dos servos giran SIEMPRE el mismo desplazamiento, a la vez y en el mismo sentido:
+// los brazos quedan paralelos y no chocan. A -> izquierda, B -> derecha, otro -> centro (de frente).
 #define SERVO_FREQ       50
 #define SERVO_RESOL      16
-#define SERVO_CANAL      0      // solo para el core ESP32 2.x
-#define SERVO_DUTY_A     1638   // 0°   izquierda
-#define SERVO_DUTY_R     4915   // 90°  centro / rechazo
-#define SERVO_DUTY_B     7864   // 180° derecha
+#define SERVO_CANAL1     0      // solo para el core ESP32 2.x (canales 0 y 1: mismo temporizador, 50 Hz)
+#define SERVO_CANAL2     1
+#define SERVO_PULSO_MIN_US 500  // ~0°
+#define SERVO_PULSO_MAX_US 2400 // ~180°
+#define SERVO_CENTRO1    90     // [PROVISIONAL] brazo 1 paralelo a la banda
+#define SERVO_CENTRO2    90     // [PROVISIONAL] brazo 2 paralelo a la banda
+#define SERVO_DESVIO     45     // [PROVISIONAL] grados que giran para desviar
+#define SERVO_SENTIDO_IZQ  1    // +1 o -1: sentido de giro que manda la pieza a la izquierda
+#define SERVO_INVERTIR1  false  // true si el servo 1 esta montado al reves
+#define SERVO_INVERTIR2  false  // true si el servo 2 esta montado al reves
 
 // ---------------------------------------------------------------- Motor
 #define MOTOR_FREQ       20000  // Hz (el TB6612 admite hasta 100 kHz)

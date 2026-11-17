@@ -20,6 +20,9 @@
 //        al sensor; muestra minimo, maximo, promedio, mediciones sin eco y un umbral sugerido
 //   x -> interferencia: compara el sensor de salida medido por turnos contra medido justo
 //        despues de disparar el de inspeccion (si cambia mucho, se "oyen" entre si)
+//   e -> estados del objeto: aplica los umbrales y el filtro del firmware y muestra cada cambio:
+//        ESPERA -> EN INSPECCION (entrada) -> EN TRANSITO -> EN SALIDA -> SALIO, con tiempos.
+//        Pasa una pieza a mano (o con la banda) de la entrada a la salida.
 //   Cualquier otra tecla detiene el modo actual.
 //
 // Criterios de exito (para cada sensor, con el montaje real):
@@ -28,6 +31,9 @@
 //   - La diferencia entre ambos casos es clara (los rangos de libre y pieza no se traslapan).
 //   - La prueba de interferencia no cambia de forma notable las mediciones del sensor de salida.
 //   - Anota la distancia minima a la que tu modulo todavia mide bien (acerca la pieza poco a poco).
+//   - Modo e: con 10 pasadas, cada pieza produce EXACTAMENTE una secuencia
+//     ENTRA -> TRANSITO -> LLEGA A SALIDA -> SALIO, sin cambios falsos con la banda libre.
+//     El tiempo "entrada->salida" medido con la banda sirve para SALIDA_TIMEOUT_MS (~el doble).
 //   Los umbrales obtenidos se copian a UMBRAL_INSP_CM y UMBRAL_SALIDA_CM en
 //   firmware/banda_clasificadora/config.h.
 
@@ -41,6 +47,14 @@
 // Tiempo maximo de espera del eco. 25 ms ~ 4 m; si no llega, se cuenta como "sin eco".
 #define TIMEOUT_US  25000UL
 #define MUESTRAS    30
+
+// ---- Modo e: mismos valores que firmware/banda_clasificadora/config.h ----
+#define UMBRAL_INSP_CM    8.0f   // [PROVISIONAL] <= umbral -> pieza en la entrada (inspeccion)
+#define UMBRAL_SALIDA_CM  8.0f   // [PROVISIONAL] <= umbral -> pieza en la salida
+#define DISTANCIA_MIN_CM  1.0f   // ecos mas cortos se consideran invalidos
+#define MUESTRAS_ACTIVAR  2      // mediciones "cerca" seguidas para dar la pieza por presente
+#define MUESTRAS_LIBERAR  3      // mediciones "lejos/sin eco" seguidas para darla por retirada
+#define SALIDA_TIMEOUT_MS 6000   // [PROVISIONAL] maximo entre dejar la entrada y llegar a la salida
 
 const uint8_t TRIG[2] = {TRIG_INSP, TRIG_SALIDA};
 const uint8_t ECHO[2] = {ECHO_INSP, ECHO_SALIDA};
@@ -156,6 +170,88 @@ void interferencia() {
   modo = 0;
 }
 
+// ---- Modo e: filtro de presencia (misma logica que firmware/deteccion.cpp) ----
+struct Filtro {
+  uint8_t cuenta = 0;
+  bool presente = false;
+  // Devuelve true si el estado cambio.
+  bool actualizar(bool cerca) {
+    if (cerca == presente) { cuenta = 0; return false; }
+    if (++cuenta >= (presente ? MUESTRAS_LIBERAR : MUESTRAS_ACTIVAR)) {
+      presente = cerca;
+      cuenta = 0;
+      return true;
+    }
+    return false;
+  }
+};
+
+Filtro filtro[2];
+enum EstadoObj { ESPERA, EN_INSPECCION, EN_TRANSITO, EN_SALIDA };
+EstadoObj estadoObj = ESPERA;
+unsigned long tEntra = 0, tDejaEntrada = 0, tLlegaSalida = 0;
+uint32_t piezas = 0;
+
+void iniciarEstados() {
+  filtro[0] = Filtro();
+  filtro[1] = Filtro();
+  estadoObj = ESPERA;
+  Serial.printf("\n=== Estados del objeto (umbral entrada %.1f cm, salida %.1f cm) ===\n",
+                UMBRAL_INSP_CM, UMBRAL_SALIDA_CM);
+  Serial.println("Pasa una pieza de la entrada a la salida. Cualquier tecla detiene.");
+  for (int i = 0; i < 4; i++) { medir(0); delay(50); medir(1); delay(50); }   // descartar las primeras
+  Serial.println("[ESPERA] banda libre");
+}
+
+void estados() {
+  const float umbral[2] = {UMBRAL_INSP_CM, UMBRAL_SALIDA_CM};
+  bool cambio[2];
+  for (int s = 0; s < 2; s++) {          // por turnos: nunca los dos a la vez
+    float d = medir(s);
+    bool cerca = d >= DISTANCIA_MIN_CM && d <= umbral[s];
+    cambio[s] = filtro[s].actualizar(cerca);
+    delay(50);
+  }
+  unsigned long t = millis();
+
+  if (cambio[0] && filtro[0].presente) {
+    if (estadoObj == ESPERA) {
+      estadoObj = EN_INSPECCION;
+      tEntra = t;
+      Serial.printf("[EN INSPECCION] pieza detectada en la ENTRADA  (aqui el firmware detiene la banda y lee NFC)\n");
+    } else {
+      Serial.println("  ALERTA: otra pieza en la entrada antes de que la anterior saliera (PIEZAS JUNTAS)");
+    }
+  }
+  if (cambio[0] && !filtro[0].presente && estadoObj == EN_INSPECCION) {
+    estadoObj = EN_TRANSITO;
+    tDejaEntrada = t;
+    Serial.printf("[EN TRANSITO] la pieza dejo la entrada (estuvo %lu ms)\n", t - tEntra);
+  }
+  if (cambio[1] && filtro[1].presente) {
+    if (estadoObj == EN_TRANSITO) {
+      estadoObj = EN_SALIDA;
+      tLlegaSalida = t;
+      Serial.printf("[EN SALIDA] llego al sensor de SALIDA  (entrada->salida: %lu ms)\n", t - tDejaEntrada);
+    } else {
+      Serial.println("  ALERTA: algo en la SALIDA sin haber pasado por la entrada (pieza sin detectar o falso eco)");
+    }
+  }
+  if (cambio[1] && !filtro[1].presente && estadoObj == EN_SALIDA) {
+    piezas++;
+    Serial.printf("[SALIO] pieza #%lu confirmada (en salida %lu ms, ciclo total %lu ms)\n",
+                  (unsigned long)piezas, t - tLlegaSalida, t - tEntra);
+    estadoObj = ESPERA;
+    Serial.println("[ESPERA] banda libre");
+  }
+  if (estadoObj == EN_TRANSITO && t - tDejaEntrada > SALIDA_TIMEOUT_MS) {
+    Serial.printf("  ALERTA: la pieza no llego a la salida en %d ms (ATASCO o pieza perdida). Vuelvo a ESPERA.\n",
+                  SALIDA_TIMEOUT_MS);
+    estadoObj = ESPERA;
+    Serial.println("[ESPERA] banda libre");
+  }
+}
+
 void setup() {
   Serial.begin(115200);
   for (int s = 0; s < 2; s++) {
@@ -167,21 +263,23 @@ void setup() {
   Serial.println();
   Serial.println("=== Prueba HC-SR04 (inspeccion GPIO14/34, salida GPIO27/35) ===");
   Serial.println("Recuerda: el Echo pasa por el divisor y ya mediste <= 3.3 V (ver encabezado).");
-  Serial.println("m = monitor   c = calibracion guiada   x = interferencia");
+  Serial.println("m = monitor   c = calibracion guiada   x = interferencia   e = estados del objeto");
 }
 
 void loop() {
   if (Serial.available()) {
     char c = Serial.read();
     if (c == 'm' || c == 'c' || c == 'x') modo = c;
+    else if (c == 'e') { modo = c; iniciarEstados(); }
     else if (c != '\n' && c != '\r') {
       modo = 0;
-      Serial.println("Detenido. m / c / x");
+      Serial.println("Detenido. m / c / x / e");
     }
   }
 
   if (modo == 'c') calibrar();
   else if (modo == 'x') interferencia();
+  else if (modo == 'e') estados();
   else if (modo == 'm') {
     float a = medir(0);
     delay(50);

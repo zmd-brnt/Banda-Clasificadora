@@ -48,13 +48,32 @@ void Motor::detener() {
 
 // ---------------------------------------------------------------- Compuerta
 
+static uint32_t anguloADuty(int ang) {
+  ang = constrain(ang, 0, 180);
+  const uint32_t us = SERVO_PULSO_MIN_US + (uint32_t)(SERVO_PULSO_MAX_US - SERVO_PULSO_MIN_US) * ang / 180;
+  const uint32_t periodoUs = 1000000UL / SERVO_FREQ;
+  return us * ((1UL << SERVO_RESOL) - 1) / periodoUs;
+}
+
 void Compuerta::begin() {
-  pwmConfigurar(PIN_SERVO, SERVO_CANAL, SERVO_FREQ, SERVO_RESOL);
+  pwmConfigurar(PIN_SERVO1, SERVO_CANAL1, SERVO_FREQ, SERVO_RESOL);
+  pwmConfigurar(PIN_SERVO2, SERVO_CANAL2, SERVO_FREQ, SERVO_RESOL);
   posicionar('R');
 }
 
+// Ambos servos reciben el MISMO desplazamiento respecto a su centro, uno inmediatamente
+// despues del otro (microsegundos): giran juntos y en el mismo sentido, sin chocar.
+void Compuerta::mover(int desplazamiento) {
+  const int a1 = SERVO_CENTRO1 + (SERVO_INVERTIR1 ? -desplazamiento : desplazamiento);
+  const int a2 = SERVO_CENTRO2 + (SERVO_INVERTIR2 ? -desplazamiento : desplazamiento);
+  pwmEscribir(PIN_SERVO1, SERVO_CANAL1, anguloADuty(a1));
+  pwmEscribir(PIN_SERVO2, SERVO_CANAL2, anguloADuty(a2));
+}
+
 void Compuerta::posicionar(char categoria) {
-  uint32_t duty = categoria == 'A' ? SERVO_DUTY_A : categoria == 'B' ? SERVO_DUTY_B : SERVO_DUTY_R;
+  int desplazamiento = 0;                                            // centro: pasa de frente
+  if (categoria == 'A') desplazamiento = SERVO_SENTIDO_IZQ * SERVO_DESVIO;    // izquierda
+  else if (categoria == 'B') desplazamiento = -SERVO_SENTIDO_IZQ * SERVO_DESVIO;  // derecha
   pos_ = (categoria == 'A' || categoria == 'B') ? categoria : 'R';
-  pwmEscribir(PIN_SERVO, SERVO_CANAL, duty);
+  mover(desplazamiento);
 }

@@ -1,6 +1,6 @@
-# Prueba de integración: NFC + Servo + UART
+# Prueba de integración: NFC + compuerta doble (2 servos) + UART
 
-Comprueba que el lector RC522, el servo SG90 y el enlace UART con la Raspberry Pi funcionan **juntos**
+Comprueba que el lector RC522, los dos servos SG90 de la compuerta y el enlace UART con la Raspberry Pi funcionan **juntos**
 siguiendo el ciclo de clasificación descrito en el proyecto (§5 y §8 del documento de avance).
 **No usa los sensores de presencia (hoy HC-SR04; antes IR), el motor ni la banda:** la pieza (una etiqueta NFC) se acerca y se retira a mano.
 
@@ -43,14 +43,16 @@ individual del módulo para aislar la causa.
 | Módulo | Pin del ESP32 | Notas |
 |---|---|---|
 | RC522 | SS 5, SCK 18, MOSI 23, MISO 19, **RST 4** | Solo 3.3 V |
-| Servo SG90 | Señal → **GPIO13** | +5 V de la **rama de potencia**, nunca del ESP32; GND común |
+| Servo 1 (lateral izq.) | Señal → **GPIO13** | +5 V de la **rama de potencia**, nunca del ESP32; GND común |
+| Servo 2 (lateral der.) | Señal → **GPIO12** | Igual que el servo 1. Comprueba que el ESP32 arranca con él conectado (GPIO12 es pin de arranque) |
 | UART | TX2 **17** → RPi pin 10 · RX2 **16** ← RPi pin 8 · GND ↔ RPi pin 6 | TX con RX, cruzado |
 
 Detalles de alimentación y tierras: [docs/conexiones.md](../../docs/conexiones.md).
 
 **Montaje en la mesa:** fija el RC522 y presenta cada etiqueta a **2 cm o menos** de la antena, siempre en
 la misma orientación (es la distancia que se identificó como límite en el documento). Ten a la vista la
-compuerta del servo para verificar a ojo hacia dónde apunta.
+compuerta para verificar a ojo hacia dónde apuntan los brazos. Copia en el `.ino` la calibración que
+obtuviste en `servo_test` (`CENTRO_S1/S2`, `DESVIO_GRADOS`, `SENTIDO_IZQ`, `INVERTIR_S1/S2`).
 
 ## Ciclo de una pieza
 
@@ -58,7 +60,7 @@ compuerta del servo para verificar a ojo hacia dónde apunta.
 ESPERA ──(etiqueta entra al campo, o 'p')──► LECTURA_NFC   banda "detenida", hasta 1.5 s
    ▲                                              │  tabla local → A / B / R
    │                                              ▼
-   │                                        CLASIFICANDO   servo: A 0° · B 180° · R 90°  (0.4 s)
+   │                                        CLASIFICANDO   2 servos: A izq. · B der. · R centro (0.4 s)
    │                                              │  banda "en marcha"
    │                                              ▼
    │                                        LIBERA_LECTOR  retirar la etiqueta (máx. 10 s → ATASCO)
@@ -124,9 +126,9 @@ de la Pi y el archivo `rpi/historial_prueba.csv` como evidencia.
 
 | # | Caso | Qué hacer | Resultado esperado | Rep. |
 |---|---|---|---|---|
-| 1 | Categoría A | Acercar la etiqueta A y retirarla cuando se mueva la compuerta | Compuerta a 0°; ~2 s después de retirarla `PIEZA ... A OK`, ACK; vuelve al centro 1 s después | 10 |
-| 2 | Categoría B | Igual, con la etiqueta B | Compuerta a 180°; `B OK` | 10 |
-| 3 | No registrada | Etiqueta que no está en `TABLA` | Compuerta al centro; `R NO_REGISTRADA` | 5 |
+| 1 | Categoría A | Acercar la etiqueta A y retirarla cuando se mueva la compuerta | Brazos a la **izquierda**; ~2 s después de retirarla `PIEZA ... A OK`, ACK; vuelve al centro 1 s después | 10 |
+| 2 | Categoría B | Igual, con la etiqueta B | Brazos a la **derecha**; `B OK` | 10 |
+| 3 | No registrada | Etiqueta que no está en `TABLA` | Brazos al centro (pasa de frente); `R NO_REGISTRADA` | 5 |
 | 4 | Sin etiqueta | Enviar `p` sin etiqueta en el lector | Tras ~1.5 s: `R SIN_LECTURA`, UID `-` | 5 |
 | 5 | Doble lectura | Dejar la etiqueta A quieta 5 s en el lector y luego retirarla | **Un solo** evento | 3 |
 | 6 | Atasco | Dejar la etiqueta más de 10 s en el lector | `ATASCO`, compuerta al centro, alerta en la Pi; `r` con la etiqueta puesta es rechazado; al retirarla, `r` vuelve a `ESPERA` y llega `RESTABLECIDO` | 2 |
@@ -139,7 +141,7 @@ de la Pi y el archivo `rpi/historial_prueba.csv` como evidencia.
 | 13 | Estabilidad | 20 piezas seguidas mezclando A, B, no registradas y `p` | El ESP32 no se reinicia (no aparece `ALERTA REINICIO` en la Pi), 0 tramas inválidas (`s`), conteo A/B/R igual en ambos lados | 1 |
 
 **La prueba se aprueba** cuando los casos 1–4 clasifican correctamente en el 100 % de las repeticiones y los
-casos 5–13 cumplen el resultado esperado. Si el caso 13 falla porque el ESP32 se reinicia al mover el servo,
+casos 5–13 cumplen el resultado esperado. Si el caso 13 falla porque el ESP32 se reinicia al mover los servos,
 el problema es la alimentación (capacitor y rama de potencia, §2 de `conexiones.md`), no el código.
 
 ## Limitaciones (decirlas en el reporte)
@@ -152,7 +154,7 @@ el problema es la alimentación (capacitor y rama de potencia, §2 de `conexione
 - **Sin motor:** `TRANSITO_MS` (2 s) y el `ciclo_ms` reportado incluyen el tiempo de tu mano; no son
   tiempos reales de la banda. Habrá que recalcularlos con la velocidad de la banda y la distancia
   lector–compuerta.
-- **El servo no tiene retroalimentación:** que la compuerta llegue al ángulo correcto se verifica a simple
+- **Los servos no tienen retroalimentación:** que la compuerta llegue al ángulo correcto se verifica a simple
   vista.
 - **La emergencia es un comando por software.** En el sistema final el botón debe actuar por interrupción
   y, idealmente, cortar la alimentación del motor sin depender del programa.

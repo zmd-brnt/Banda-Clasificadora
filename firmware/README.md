@@ -67,7 +67,7 @@ ocupación y capacidad de cada contenedor, tabla local y la cola de eventos sin 
 | `pendientes.*` | Cola de eventos sin ACK | Sí |
 | `deteccion.*` | Distancia y filtro de presencia | Sí |
 | `ultrasonico.*` | Dos HC-SR04, medidos por turnos, con interrupciones (no bloquea) | No |
-| `actuadores.*` | Motor (PWMA) y servo | No |
+| `actuadores.*` | Motor (PWMA) y compuerta doble (2 servos: GPIO13 y GPIO12) | No |
 | `interfaz.*` | Paro, botón Restablecer, LEDs, buzzer activo, OLED | No |
 | `nfc.*` | RC522 | No |
 | `enlace.*` | UART: envío, recepción, latido, reintentos | No |
@@ -90,7 +90,8 @@ Necesita `g++`. Resultado esperado: `TODAS LAS PRUEBAS PASARON` (90 verificacion
    - un atasco "razonable": `ATASCO_MS`.
 4. **Lectura NFC:** si la etiqueta queda antes o después del RC522 al detenerse la banda, ajusta
    `RETARDO_PARO_MS` o mueve el sensor de inspección.
-5. **Ángulos del servo:** `SERVO_DUTY_A/R/B` con la compuerta montada (`pruebas/servo_test`).
+5. **Ángulos de los servos:** calibra con `pruebas/servo_test` y copia a `config.h` `SERVO_CENTRO1/2`, `SERVO_DESVIO`,
+   `SERVO_SENTIDO_IZQ` y `SERVO_INVERTIR1/2` (mismos nombres sin el prefijo `SERVO_` en la prueba).
 
 Anota cada valor medido (fecha, condición, resultado) en la documentación mecánica del módulo A.
 
@@ -102,9 +103,9 @@ alimentación y desconexión de la Raspberry Pi. El panel exporta el historial c
 
 ## 8. Limitaciones
 
-- El servo no tiene retroalimentación: la posición de la compuerta solo se verifica indirectamente con el
+- Los servos no tienen retroalimentación: la posición de la compuerta solo se verifica indirectamente con el
   sensor de salida (y a simple vista).
-- El paro por hardware corta el motor, **no** el servo (este se lleva al centro por software).
+- El paro por hardware corta el motor, **no** los servos (se llevan al centro por software).
 - Piezas muy juntas pueden terminar en rechazo `SIN_LECTURA` (ver `docs/maquina-de-estados.md` §3).
 - GPIO39 (detección del paro) es una de las entradas del ESP32 con fallos conocidos de interrupciones falsas
   cuando se usa WiFi o el ADC; este firmware no usa ninguno de los dos. Si aparecen paros falsos, revisa el

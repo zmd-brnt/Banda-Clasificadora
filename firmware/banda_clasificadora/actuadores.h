@@ -1,4 +1,4 @@
-// actuadores.h — Motor de la banda (TB6612FNG) y compuerta (servo SG90)
+// actuadores.h — Motor de la banda (TB6612FNG) y compuerta doble (2 servos SG90 laterales)
 //
 // Motor: AIN1/AIN2 fijos por cableado, por eso solo se controla la velocidad (PWMA).
 // La habilitacion del driver (STBY) la maneja paro.h, porque pasa por el boton de paro.
@@ -21,9 +21,10 @@ class Motor {
 class Compuerta {
  public:
   void begin();                 // deja la compuerta al centro
-  void posicionar(char categoria);   // 'A' izquierda, 'B' derecha, otro -> centro
+  void posicionar(char categoria);   // 'A' izquierda, 'B' derecha, otro -> centro (pasa de frente)
   char posicion() const { return pos_; }
 
  private:
+  void mover(int desplazamiento);    // mismo giro para los dos servos
   char pos_ = 'R';
 };
